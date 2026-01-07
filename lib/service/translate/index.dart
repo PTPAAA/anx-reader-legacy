@@ -3,7 +3,7 @@ import 'dart:core';
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/enums/lang_list.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
-import 'package:anx_reader/service/translate/ai.dart';
+
 import 'package:anx_reader/service/translate/deepl.dart';
 import 'package:anx_reader/service/translate/google.dart';
 import 'package:anx_reader/service/translate/microsoft.dart';
@@ -14,8 +14,7 @@ import 'package:flutter/services.dart';
 enum TranslateService {
   google('Google'),
   microsoft('Microsoft'),
-  deepl('DeepL'),
-  ai('AI');
+  deepl('DeepL');
 
   const TranslateService(this.label);
 
@@ -179,8 +178,6 @@ class TranslateFactory {
         return MicrosoftTranslateProvider();
       case TranslateService.deepl:
         return DeepLTranslateProvider();
-      case TranslateService.ai:
-        return AiTranslateProvider();
     }
   }
 }
