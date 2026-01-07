@@ -138,8 +138,8 @@ dev_dependencies:
   test: any
   build_runner: ^2.4.13
 
-  riverpod_generator: ^2.4.3
-  freezed: ^3.0.2
+  riverpod_generator: 2.4.3
+  freezed: 2.4.6
   json_serializable: ^6.9.0
 #  flutter_launcher_icons: ^0.11.0
 
