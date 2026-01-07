@@ -122,6 +122,7 @@ dependency_overrides:
   collection: 1.19.1
   async: 2.13.0
   characters: 1.4.0
+  motor: 1.0.0-dev.5
   
 
 dev_dependencies:
