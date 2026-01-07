@@ -8,18 +8,13 @@ import 'package:anx_reader/enums/sync_direction.dart';
 import 'package:anx_reader/enums/sync_trigger.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/main.dart';
-import 'package:anx_reader/models/ai_quick_prompt_chip.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/models/read_theme.dart';
 import 'package:anx_reader/page/book_detail.dart';
 import 'package:anx_reader/page/book_player/epub_player.dart';
 import 'package:anx_reader/providers/sync.dart';
-import 'package:anx_reader/service/ai/index.dart';
-import 'package:anx_reader/service/ai/prompt_generate.dart';
 import 'package:anx_reader/utils/toast/common.dart';
 import 'package:anx_reader/utils/ui/status_bar.dart';
-import 'package:anx_reader/widgets/ai/ai_chat_stream.dart';
-import 'package:anx_reader/widgets/ai/ai_stream.dart';
 import 'package:anx_reader/widgets/reading_page/notes_widget.dart';
 import 'package:anx_reader/models/reading_time.dart';
 import 'package:anx_reader/widgets/reading_page/progress_widget.dart';
@@ -70,11 +65,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
   Timer? _awakeTimer;
   bool bottomBarOffstage = true;
   late String heroTag;
-  Widget? _aiChat;
-  final aiChatKey = GlobalKey<AiChatStreamState>();
-  static const double _aiChatMinWidth = 240;
-  double _aiChatWidth = 300;
-  bool _isResizingAiChat = false;
+
   bool bookmarkExists = false;
 
   late final FocusNode _readerFocusNode;
@@ -351,131 +342,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     });
   }
 
-  double _aiChatMaxWidth(BuildContext context) {
-    final totalWidth = MediaQuery.of(context).size.width;
-    final maxByPercentage = totalWidth * 0.65;
-    final maxByRemaining = totalWidth - 320;
-    final maxWidth = math.min(maxByPercentage, maxByRemaining);
-    return math.max(_aiChatMinWidth, maxWidth);
-  }
-
-  void _beginAiChatResize(double globalDx) {
-    setState(() {
-      _isResizingAiChat = true;
-    });
-  }
-
-  void _applyAiChatResizeDelta(double delta, BuildContext context) {
-    final maxWidth = _aiChatMaxWidth(context);
-    final updated =
-        (_aiChatWidth - delta).clamp(_aiChatMinWidth, maxWidth).toDouble();
-    if (updated != _aiChatWidth) {
-      setState(() {
-        _aiChatWidth = updated;
-      });
-    }
-  }
-
-  void _endAiChatResize() {
-    if (_isResizingAiChat) {
-      setState(() {
-        _isResizingAiChat = false;
-      });
-    }
-  }
-
-  Future<void> onLoadEnd() async {
-    if (Prefs().autoSummaryPreviousContent) {
-      final previousContent =
-          await epubPlayerKey.currentState!.previousContent(2000);
-      final prompt = generatePromptSummaryThePreviousContent(previousContent);
-      SmartDialog.show(
-        builder: (context) => AlertDialog(
-          title: Text(L10n.of(context).readingPageSummaryPreviousContent),
-          content: AiStream(
-            prompt: prompt,
-          ),
-        ),
-        onDismiss: () {
-          cancelActiveAiRequest();
-        },
-      );
-    }
-  }
-
-  Future<void> showAiChat({
-    String? content,
-    bool sendImmediate = false,
-  }) async {
-    List<AiQuickPromptChip> quickPrompts = [
-      AiQuickPromptChip(
-        icon: EvaIcons.book,
-        label: L10n.of(context).settingsAiPromptSummaryTheChapter,
-        prompt: generatePromptSummaryTheChapter().buildString(),
-      ),
-      AiQuickPromptChip(
-        icon: Icons.menu_book_rounded,
-        label: L10n.of(context).settingsAiPromptSummaryTheBook,
-        prompt: generatePromptSummaryTheBook().buildString(),
-      ),
-      AiQuickPromptChip(
-        icon: Icons.account_tree_outlined,
-        label: L10n.of(context).settingsAiPromptMindmap,
-        prompt: generatePromptMindmap().buildString(),
-      ),
-    ];
-    if (MediaQuery.of(navigatorKey.currentContext!).size.width < 600) {
-      showModalBottomSheet(
-          context: navigatorKey.currentContext!,
-          isScrollControlled: true,
-          showDragHandle: false,
-          clipBehavior: Clip.hardEdge,
-          builder: (context) => PointerInterceptor(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.8,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: AiChatStream(
-                      key: aiChatKey,
-                      initialMessage: content,
-                      sendImmediate: sendImmediate,
-                      quickPromptChips: quickPrompts,
-                    ),
-                  ),
-                ),
-              ));
-    } else {
-      setState(() {
-        final maxWidth = _aiChatMaxWidth(navigatorKey.currentContext!);
-        _aiChatWidth = _aiChatWidth.clamp(_aiChatMinWidth, maxWidth);
-        _aiChat = Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: AiChatStream(
-                key: aiChatKey,
-                initialMessage: content,
-                sendImmediate: sendImmediate,
-                quickPromptChips: quickPrompts,
-                trailing: [
-                  IconButton(
-                    onPressed: () {
-                      setState(() {
-                        _aiChat = null;
-                      });
-                    },
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      });
-    }
-  }
+  Future<void> onLoadEnd() async {}
 
   void updateState() {
     if (mounted) {
@@ -487,20 +354,6 @@ class ReadingPageState extends ConsumerState<ReadingPage>
 
   @override
   Widget build(BuildContext context) {
-    var aiButton = IconButton(
-      icon: const Icon(Icons.auto_awesome),
-      onPressed: () async {
-        if (MediaQuery.of(context).size.width > 600 && _aiChat != null) {
-          setState(() {
-            _aiChat = null;
-          });
-          return;
-        }
-
-        showOrHideAppBarAndBottomBar(false);
-        showAiChat();
-      },
-    );
     Offstage controller = Offstage(
       offstage: bottomBarOffstage,
       child: PointerInterceptor(
@@ -530,7 +383,6 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                     },
                   ),
                   actions: [
-                    aiButton,
                     IconButton(
                         onPressed: () {
                           if (bookmarkExists) {
@@ -677,51 +529,11 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                                   initialThemes: widget.initialThemes,
                                   updateParent: updateState,
                                 ),
-                                if (_isResizingAiChat)
-                                  SizedBox.expand(
-                                    child: Container(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .surface
-                                          .withAlpha(1),
-                                    ),
-                                  ),
                               ],
                             ),
                           ),
                         ),
                       ),
-                      if (_aiChat != null)
-                        GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onHorizontalDragStart: (details) {
-                            _beginAiChatResize(details.globalPosition.dx);
-                          },
-                          onHorizontalDragUpdate: (details) {
-                            _applyAiChatResizeDelta(
-                              details.delta.dx,
-                              context,
-                            );
-                          },
-                          onHorizontalDragEnd: (_) {
-                            _endAiChatResize();
-                          },
-                          onHorizontalDragCancel: () {
-                            _endAiChatResize();
-                          },
-                          child: MouseRegion(
-                              cursor: SystemMouseCursors.resizeColumn,
-                              child: VerticalDivider(
-                                width: 2,
-                                thickness: 1,
-                              )),
-                        ),
-                      if (_aiChat != null)
-                        SizedBox(
-                          key: const ValueKey('ai-chat-panel'),
-                          width: _aiChatWidth,
-                          child: _aiChat,
-                        )
                     ],
                   ),
                   controller,

@@ -1,6 +1,6 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
-import 'package:anx_reader/page/settings_page/ai.dart';
+
 import 'package:anx_reader/page/settings_page/advanced.dart';
 import 'package:anx_reader/page/settings_page/appearance.dart';
 import 'package:anx_reader/page/settings_page/developer/developer_options_page.dart';
@@ -115,15 +115,6 @@ class _SubMoreSettingsState extends State<SubMoreSettings> {
                 "sections": const TranslateSetting(),
                 "subtitles": [
                   L10n.of(context).settingsTranslate,
-                ],
-              },
-              {
-                "title": L10n.of(context).settingsAi,
-                "icon": Icons.auto_awesome,
-                "sections": const AISettings(),
-                "subtitles": [
-                  L10n.of(context).settingsAiServices,
-                  L10n.of(context).settingsAiPrompt,
                 ],
               },
               {

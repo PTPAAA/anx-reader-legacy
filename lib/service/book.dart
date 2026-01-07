@@ -10,7 +10,7 @@ import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/models/current_reading_state.dart';
 import 'package:anx_reader/page/home_page.dart';
 import 'package:anx_reader/page/iap_page.dart';
-import 'package:anx_reader/providers/ai_chat.dart';
+
 import 'package:anx_reader/providers/chapter_content_bridge.dart';
 import 'package:anx_reader/providers/current_reading.dart';
 import 'package:anx_reader/providers/sync.dart';
@@ -403,7 +403,7 @@ Future<void> pushToReadingPage(
       return;
     }
   }
-  ref.read(aiChatProvider.notifier).clear();
+
   final initialThemes = await themeDao.selectThemes();
   ref.read(currentReadingProvider.notifier).start(
         CurrentReadingState(
