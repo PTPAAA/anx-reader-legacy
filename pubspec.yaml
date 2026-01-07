@@ -131,6 +131,7 @@ dependencies:
 dependency_overrides:
   meta: 1.15.0
   collection: 1.19.1
+  async: 2.13.0
   openai_dart:
     git:
       url: https://github.com/Anxcye/langchain_dart.git
