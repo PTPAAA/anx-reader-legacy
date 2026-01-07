@@ -5,7 +5,7 @@ import 'package:anx_reader/dao/database.dart';
 import 'package:anx_reader/enums/sync_direction.dart';
 import 'package:anx_reader/enums/sync_trigger.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
-import 'package:anx_reader/page/home_page/ai_page.dart';
+
 import 'package:anx_reader/service/initialization_check.dart';
 import 'package:anx_reader/page/home_page/bookshelf_page.dart';
 import 'package:anx_reader/page/home_page/notes_page.dart';
@@ -22,7 +22,7 @@ import 'package:anx_reader/providers/sync.dart';
 import 'package:anx_reader/providers/iap.dart';
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/utils/toast/common.dart';
-import 'package:anx_reader/widgets/ai/ai_chat_stream.dart';
+
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
 import 'package:anx_reader/widgets/settings/about.dart';
 import 'package:flutter/cupertino.dart';
@@ -140,7 +140,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         BookshelfPage(controller: controller),
         if (Prefs().bottomNavigatorShowStatistics)
           StatisticPage(controller: controller),
-        if (Prefs().bottomNavigatorShowAI) AiChatStream(),
         if (Prefs().bottomNavigatorShowNote) NotesPage(controller: controller),
         SettingsPage(controller: controller),
       ];
@@ -159,12 +158,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           'label': L10n.of(context).navBarStatistics,
           'identifier': 'statistics'
         },
-      if (Prefs().bottomNavigatorShowAI)
-        {
-          'icon': Icons.auto_awesome,
-          'label': L10n.of(context).navBarAI,
-          'identifier': 'ai'
-        },
       if (Prefs().bottomNavigatorShowNote)
         {
           'icon': Icons.note,
@@ -180,11 +173,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     void onBottomTap(int index, bool fromRail) {
       VibrationService.heavy();
-      if (navBarItems[index]['identifier'] == 'ai' && !fromRail) {
-        showCupertinoSheet(
-            context: context, builder: (context) => const AiPage());
-        return;
-      }
+
       setState(() {
         _currentIndex = index;
       });
@@ -254,9 +243,6 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           );
         } else {
-          if (navBarItems[_currentIndex]['identifier'] == 'ai') {
-            _currentIndex = 0;
-          }
           return Scaffold(
             extendBody: true,
             body: BottomBar(
