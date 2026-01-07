@@ -93,7 +93,7 @@ class StyledMarkdown extends StatelessWidget {
     // Lists
     html = html.replaceAllMapped(
         RegExp(r'^- (.+)$', multiLine: true), (m) => '<li>${m[1]}</li>');
-    html = html.replaceAll(
+    html = html.replaceAllMapped(
         RegExp(r'(<li>.*<\/li>\n?)+'), (match) => '<ul>${match.group(0)}</ul>');
 
     // Paragraphs (simple newlines)

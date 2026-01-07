@@ -194,15 +194,6 @@ class _AppearanceSettingState extends State<AppearanceSetting> {
           title: Text(L10n.of(context).settingsAppearanceBottomNavigatorShow),
           tiles: [
             SettingsTile.switchTile(
-              title: Text(L10n.of(context).navBarAI),
-              initialValue: Prefs().bottomNavigatorShowAI,
-              onToggle: (bool value) {
-                setState(() {
-                  Prefs().bottomNavigatorShowAI = value;
-                });
-              },
-            ),
-            SettingsTile.switchTile(
               title: Text(L10n.of(context).navBarStatistics),
               initialValue: Prefs().bottomNavigatorShowStatistics,
               onToggle: (bool value) {
