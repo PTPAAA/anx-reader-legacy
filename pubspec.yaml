@@ -105,7 +105,7 @@ dependencies:
       url: https://github.com/Anxcye/share_handler.git
       path: share_handler
       ref: eeaa04d22e7e70babb55b6825b9ca7016e89c89a
-  heroine: ^0.5.0+2
+  heroine: ^0.4.0+1
   vibration: ^3.1.4
   staggered_reorderable:
     git:
