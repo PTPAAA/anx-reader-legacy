@@ -35,7 +35,9 @@ jobs:
       - name: Build for iOS
         run: |
           sudo xcode-select -switch /Applications/Xcode_${{ inputs.xcode_version }}.app/Contents/Developer
+          mkdir -p lib/l10n/generated
           flutter gen-l10n
+          ls -R lib/l10n/generated || echo "L10n dir empty"
           dart run build_runner build --delete-conflicting-outputs
           
           # Build signed regular archive if possible, otherwise unsigned
