@@ -505,8 +505,11 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
   Widget _buildImage(String src) {
     if (src.isEmpty) return const SizedBox.shrink();
 
-    // Try to load from EPUB archive
-    final imageData = _parser?.getResource(src);
+    // Get the current chapter's directory for resolving relative paths
+    final chapterDir = _parser?.getChapterDir(_currentChapterIndex) ?? '';
+
+    // Try to load from EPUB archive with chapter directory context
+    final imageData = _parser?.getResource(src, baseDir: chapterDir);
     if (imageData != null) {
       return Image.memory(
         Uint8List.fromList(imageData),

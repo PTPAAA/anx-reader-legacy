@@ -852,7 +852,7 @@ class Prefs extends ChangeNotifier {
   }
 
   bool get bottomNavigatorShowNote {
-    return prefs.getBool('bottomNavigatorShowNote') ?? true;
+    return prefs.getBool('bottomNavigatorShowNote') ?? false;
   }
 
   set bottomNavigatorShowStatistics(bool status) {

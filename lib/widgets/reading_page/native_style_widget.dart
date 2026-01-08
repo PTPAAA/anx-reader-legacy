@@ -4,7 +4,6 @@ import 'package:anx_reader/models/book_style.dart';
 import 'package:anx_reader/page/reading_page.dart';
 
 /// Simplified style widget for iOS native reader
-/// Only includes font size, line height, side margin
 class NativeStyleWidget extends StatefulWidget {
   final VoidCallback onStyleChanged;
 
@@ -29,8 +28,14 @@ class _NativeStyleWidgetState extends State<NativeStyleWidget> {
   void _updateStyle() {
     Prefs().saveBookStyleToPrefs(_style);
     widget.onStyleChanged();
-    // Trigger reader rebuild
     nativePlayerKey.currentState?.setState(() {});
+  }
+
+  void _resetToDefault() {
+    setState(() {
+      _style = BookStyle(); // Default values
+    });
+    _updateStyle();
   }
 
   @override
@@ -40,15 +45,25 @@ class _NativeStyleWidgetState extends State<NativeStyleWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '阅读样式',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '阅读样式',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              TextButton.icon(
+                onPressed: _resetToDefault,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('重置'),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Font size (stored as multiplier 0.5-3.0, display as 12-36px)
+          // Font size
           _buildSliderRow(
             icon: Icons.format_size,
             label: '字体大小',
@@ -62,7 +77,7 @@ class _NativeStyleWidgetState extends State<NativeStyleWidget> {
             },
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Line height
           _buildSliderRow(
@@ -78,7 +93,7 @@ class _NativeStyleWidgetState extends State<NativeStyleWidget> {
             },
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Side margin
           _buildSliderRow(
@@ -116,22 +131,15 @@ class _NativeStyleWidgetState extends State<NativeStyleWidget> {
           child: Text(label, style: const TextStyle(fontSize: 13)),
         ),
         Expanded(
-          child: SliderTheme(
-            data: SliderThemeData(
-              trackHeight: 3,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-            ),
-            child: Slider(
-              value: value.clamp(min, max),
-              min: min,
-              max: max,
-              onChanged: onChanged,
-            ),
+          child: Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            onChanged: onChanged,
           ),
         ),
         SizedBox(
-          width: 36,
+          width: 32,
           child: Text(
             displayValue,
             style: const TextStyle(fontSize: 12, color: Colors.grey),

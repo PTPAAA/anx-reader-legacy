@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:anx_reader/page/book_player/native_epub_player.dart';
 
 /// Native bookmark widget for iOS reader
-class NativeBookmarkWidget extends StatelessWidget {
+class NativeBookmarkWidget extends StatefulWidget {
   final GlobalKey<NativeEpubPlayerState> nativePlayerKey;
   final Function(bool) hideAppBarAndBottomBar;
   final VoidCallback closeDrawer;
@@ -15,8 +15,13 @@ class NativeBookmarkWidget extends StatelessWidget {
   });
 
   @override
+  State<NativeBookmarkWidget> createState() => _NativeBookmarkWidgetState();
+}
+
+class _NativeBookmarkWidgetState extends State<NativeBookmarkWidget> {
+  @override
   Widget build(BuildContext context) {
-    final playerState = nativePlayerKey.currentState;
+    final playerState = widget.nativePlayerKey.currentState;
     if (playerState == null) {
       return const Center(child: Text('书签加载中...'));
     }
@@ -40,8 +45,7 @@ class NativeBookmarkWidget extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: () {
                   playerState.addBookmark();
-                  // Trigger rebuild
-                  (context as Element).markNeedsBuild();
+                  setState(() {}); // Trigger rebuild
                 },
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('添加'),
@@ -71,8 +75,7 @@ class NativeBookmarkWidget extends StatelessWidget {
             child: ListView.builder(
               itemCount: bookmarks.length,
               itemBuilder: (context, index) {
-                final bookmark =
-                    bookmarks[bookmarks.length - 1 - index]; // Newest first
+                final bookmark = bookmarks[bookmarks.length - 1 - index];
                 return ListTile(
                   leading: Container(
                     width: 40,
@@ -101,13 +104,13 @@ class NativeBookmarkWidget extends StatelessWidget {
                     icon: const Icon(Icons.delete_outline, size: 20),
                     onPressed: () {
                       playerState.deleteBookmark(bookmark.id);
-                      (context as Element).markNeedsBuild();
+                      setState(() {});
                     },
                   ),
                   onTap: () {
                     playerState.goToBookmark(bookmark);
-                    closeDrawer();
-                    hideAppBarAndBottomBar(false);
+                    widget.closeDrawer();
+                    widget.hideAppBarAndBottomBar(false);
                   },
                 );
               },

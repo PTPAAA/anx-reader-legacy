@@ -389,19 +389,21 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                     },
                   ),
                   actions: [
-                    IconButton(
-                        onPressed: () {
-                          if (bookmarkExists) {
-                            epubPlayerKey.currentState!.removeAnnotation(
-                              epubPlayerKey.currentState!.bookmarkCfi,
-                            );
-                          } else {
-                            epubPlayerKey.currentState!.addBookmarkHere();
-                          }
-                        },
-                        icon: bookmarkExists
-                            ? const Icon(Icons.bookmark)
-                            : const Icon(Icons.bookmark_border)),
+                    // Hide bookmark button on iOS (use dock button instead)
+                    if (!Platform.isIOS)
+                      IconButton(
+                          onPressed: () {
+                            if (bookmarkExists) {
+                              epubPlayerKey.currentState!.removeAnnotation(
+                                epubPlayerKey.currentState!.bookmarkCfi,
+                              );
+                            } else {
+                              epubPlayerKey.currentState!.addBookmarkHere();
+                            }
+                          },
+                          icon: bookmarkExists
+                              ? const Icon(Icons.bookmark)
+                              : const Icon(Icons.bookmark_border)),
                     IconButton(
                       icon: const Icon(EvaIcons.more_vertical),
                       onPressed: () {

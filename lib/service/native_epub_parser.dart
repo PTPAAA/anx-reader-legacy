@@ -216,22 +216,55 @@ class NativeEpubParser {
 
   /// Extract resource (images, css) by href
   /// Handles relative and absolute paths within EPUB
-  List<int>? getResource(String href) {
-    // Normalize path - remove leading ../ and ./
+  /// [baseDir] is the directory of the current chapter for resolving relative paths
+  List<int>? getResource(String href, {String? baseDir}) {
+    if (href.isEmpty) return null;
+
+    // Normalize path - handle relative paths properly
     String normalizedHref = href;
-    while (normalizedHref.startsWith('../')) {
-      normalizedHref = normalizedHref.substring(3);
-    }
-    while (normalizedHref.startsWith('./')) {
-      normalizedHref = normalizedHref.substring(2);
+
+    // If we have a base directory, resolve relative paths
+    if (baseDir != null && baseDir.isNotEmpty) {
+      // Handle ../ by going up directories
+      String currentBase = baseDir;
+      while (normalizedHref.startsWith('../')) {
+        normalizedHref = normalizedHref.substring(3);
+        // Remove last directory from base
+        if (currentBase.endsWith('/')) {
+          currentBase = currentBase.substring(0, currentBase.length - 1);
+        }
+        final lastSlash = currentBase.lastIndexOf('/');
+        if (lastSlash >= 0) {
+          currentBase = currentBase.substring(0, lastSlash + 1);
+        } else {
+          currentBase = '';
+        }
+      }
+      // Handle ./
+      while (normalizedHref.startsWith('./')) {
+        normalizedHref = normalizedHref.substring(2);
+      }
+      // Combine base with relative path
+      normalizedHref = currentBase + normalizedHref;
+    } else {
+      // No base directory - just clean up the path
+      while (normalizedHref.startsWith('../')) {
+        normalizedHref = normalizedHref.substring(3);
+      }
+      while (normalizedHref.startsWith('./')) {
+        normalizedHref = normalizedHref.substring(2);
+      }
     }
 
     // Try different path combinations
     final pathsToTry = [
+      normalizedHref, // Try the resolved path first
       _opfDir + normalizedHref,
-      normalizedHref,
       'OEBPS/' + normalizedHref,
       'OPS/' + normalizedHref,
+      // Also try without the opfDir if normalizedHref already contains it
+      if (normalizedHref.startsWith(_opfDir))
+        normalizedHref.substring(_opfDir.length),
     ];
 
     for (final path in pathsToTry) {
