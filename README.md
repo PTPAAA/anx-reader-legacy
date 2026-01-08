@@ -1,4 +1,5 @@
-**English** | [简体中文](README_zh.md) | [Türkçe](README_tr.md) | [Русский](README_RU.md)
+对anx reader的修改，只是为了适配我的iphone 8p备用摸鱼手机看小说
+源项目https://github.com/Anxcye/anx-reader
 
 <br>
 
