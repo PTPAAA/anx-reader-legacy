@@ -298,13 +298,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             itemCount: themeColors.length,
             itemBuilder: (context, index) {
               final color = themeColors[index];
-              final isSelected =
-                  color.toARGB32() == currentThemeColor.toARGB32();
+              final isSelected = color.value == currentThemeColor.value;
 
               return GestureDetector(
                 onTap: () {
                   setState(() {
-                    Prefs().saveThemeToPrefs(color.toARGB32());
+                    Prefs().saveThemeToPrefs(color.value);
                   });
                 },
                 child: Container(
