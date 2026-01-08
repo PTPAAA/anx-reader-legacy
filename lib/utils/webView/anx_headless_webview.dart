@@ -36,7 +36,7 @@ class AnxHeadlessWebView {
   Future<void> run() async {
     bool useOverlay = false;
     try {
-      if (Platform.operatingSystem == 'ohos') {
+      if (Platform.isIOS || Platform.operatingSystem == 'ohos') {
         useOverlay = true;
       }
     } catch (e) {

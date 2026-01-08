@@ -1087,17 +1087,17 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
                   ),
                 ),
               ),
-            if (Prefs().openBookAnimation)
-              SizedBox.expand(
-                child: Prefs().openBookAnimation
-                    ? IgnorePointer(
-                        ignoring: true,
-                        child: FadeTransition(
-                            opacity: _animation!,
-                            child: BookCover(book: widget.book)),
-                      )
-                    : BookCover(book: widget.book),
-              ),
+            // if (Prefs().openBookAnimation)
+            //   SizedBox.expand(
+            //     child: Prefs().openBookAnimation
+            //         ? IgnorePointer(
+            //             ignoring: true,
+            //             child: FadeTransition(
+            //                 opacity: _animation!,
+            //                 child: BookCover(book: widget.book)),
+            //           )
+            //         : BookCover(book: widget.book),
+            //   ),
           ],
         ),
       ),
