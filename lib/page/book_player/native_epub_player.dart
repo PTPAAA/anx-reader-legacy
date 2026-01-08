@@ -86,6 +86,10 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
   Timer? _statusTimer;
   double _chapterScrollProgress = 0.0;
 
+  // Progress save
+  Timer? _progressSaveTimer;
+  bool _initialPositionRestored = false;
+
   // Uses widget.bookmarksNotifier
   ValueNotifier<List<NativeBookmark>> get _bookmarksNotifier =>
       widget.bookmarksNotifier;
@@ -143,6 +147,15 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
         if ((progress - _chapterScrollProgress).abs() > 0.01) {
           setState(() => _chapterScrollProgress = progress);
         }
+      }
+      // Debounced progress save - save 1 second after user stops scrolling
+      if (_initialPositionRestored) {
+        _progressSaveTimer?.cancel();
+        _progressSaveTimer = Timer(const Duration(seconds: 1), () {
+          if (mounted) {
+            _updateProgress();
+          }
+        });
       }
     }
   }
@@ -239,8 +252,13 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
         if (_scrollController.hasClients && _pendingScrollOffset != null) {
           _scrollController.jumpTo(_pendingScrollOffset!);
           _pendingScrollOffset = null;
+          // Mark initial position as restored so scrolling can start saving progress
+          _initialPositionRestored = true;
         }
       });
+    } else {
+      // No scroll position to restore, mark as ready
+      _initialPositionRestored = true;
     }
   }
 
@@ -324,6 +342,7 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
   @override
   void dispose() {
     _updateProgress();
+    _progressSaveTimer?.cancel();
     _scrollController.dispose();
     _statusTimer?.cancel();
     super.dispose();
