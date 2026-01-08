@@ -14,8 +14,11 @@ import 'package:anx_reader/models/read_theme.dart';
 import 'package:anx_reader/page/book_detail.dart';
 import 'package:anx_reader/page/book_player/epub_player.dart';
 import 'package:anx_reader/page/book_player/native_epub_player.dart';
+import 'package:anx_reader/dao/book_note.dart';
+import 'package:anx_reader/models/book_note.dart';
 import 'package:anx_reader/providers/sync.dart';
 import 'package:anx_reader/utils/toast/common.dart';
+import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/utils/ui/status_bar.dart';
 import 'package:anx_reader/widgets/reading_page/notes_widget.dart';
 import 'package:anx_reader/models/reading_time.dart';
@@ -71,6 +74,8 @@ class ReadingPageState extends ConsumerState<ReadingPage>
   DateTime? _sessionStart;
   Timer? _awakeTimer;
   final ValueNotifier<bool> _controlsVisible = ValueNotifier<bool>(false);
+  final ValueNotifier<List<NativeBookmark>> _bookmarksNotifier =
+      ValueNotifier([]);
   late String heroTag;
 
   bool bookmarkExists = false;
@@ -115,6 +120,9 @@ class ReadingPageState extends ConsumerState<ReadingPage>
         }
       });
     }
+    if (Platform.isIOS) {
+      _loadNativeBookmarks();
+    }
     super.initState();
   }
 
@@ -139,6 +147,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     //   unawaited(_volumeKeyBoard.removeListener());
     // }
     _readerFocusNode.dispose();
+    _bookmarksNotifier.dispose();
     super.dispose();
   }
 
@@ -357,6 +366,66 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     }
   }
 
+  Future<void> _loadNativeBookmarks() async {
+    final notes = await bookNoteDao.selectBookNotesByBookId(_book.id);
+    final nativeBookmarks = <NativeBookmark>[];
+
+    for (var note in notes) {
+      if (note.type == 'bookmark' && note.cfi.startsWith('native_pos_v1:')) {
+        try {
+          final parts = note.cfi.split(':');
+          if (parts.length == 3) {
+            final chapterIndex = int.parse(parts[1]);
+            final scrollPosition = double.parse(parts[2]);
+            nativeBookmarks.add(NativeBookmark(
+              id: note.id.toString(),
+              chapterIndex: chapterIndex,
+              scrollPosition: scrollPosition,
+              label: note.content,
+              createdAt: note.createTime ?? DateTime.now(),
+            ));
+          }
+        } catch (e) {
+          AnxLog.warning('Failed to parse native bookmark cfi: ${note.cfi}');
+        }
+      }
+    }
+    _bookmarksNotifier.value = nativeBookmarks;
+  }
+
+  void _onAddBookmark() async {
+    final currentState = nativePlayerKey.currentState;
+    if (currentState == null) return;
+
+    final bookmarkData = currentState.createBookmarkData();
+    final note = BookNote(
+      bookId: _book.id,
+      content: bookmarkData.label,
+      cfi:
+          'native_pos_v1:${bookmarkData.chapterIndex}:${bookmarkData.scrollPosition}',
+      chapter: currentState.chapterTitle,
+      type: 'bookmark',
+      color: '',
+      updateTime: DateTime.now(),
+      createTime: DateTime.now(),
+    );
+
+    await bookNoteDao.save(note);
+    _loadNativeBookmarks();
+  }
+
+  void _onDeleteBookmark(String id) async {
+    final intId = int.tryParse(id);
+    if (intId != null) {
+      await bookNoteDao.deleteBookNoteById(intId);
+      _loadNativeBookmarks();
+    }
+  }
+
+  void _onGoToBookmark(NativeBookmark bookmark) {
+    nativePlayerKey.currentState?.goToBookmark(bookmark);
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget controller = ValueListenableBuilder<bool>(
@@ -461,8 +530,20 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                                                 setState(() {
                                                   _currentPage =
                                                       NativeBookmarkWidget(
-                                                    nativePlayerKey:
-                                                        nativePlayerKey,
+                                                    bookmarksNotifier:
+                                                        _bookmarksNotifier,
+                                                    onAddBookmark:
+                                                        _onAddBookmark,
+                                                    onDeleteBookmark:
+                                                        _onDeleteBookmark,
+                                                    onGoToBookmark:
+                                                        _onGoToBookmark,
+                                                    getChapterTitle: (index) =>
+                                                        nativePlayerKey
+                                                            .currentState
+                                                            ?.parser
+                                                            ?.chapters[index]
+                                                            .title,
                                                     hideAppBarAndBottomBar:
                                                         showOrHideAppBarAndBottomBar,
                                                     closeDrawer: () {},
@@ -600,6 +681,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                               showOrHideAppBarAndBottomBar: (show) =>
                                   showOrHideAppBarAndBottomBar(show),
                               onLoadEnd: onLoadEnd,
+                              bookmarksNotifier: _bookmarksNotifier,
                             )
                           else
                             EpubPlayer(

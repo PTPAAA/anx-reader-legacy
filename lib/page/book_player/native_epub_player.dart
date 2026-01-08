@@ -54,6 +54,7 @@ class NativeEpubPlayer extends ConsumerStatefulWidget {
   final String? cfi;
   final Function(bool) showOrHideAppBarAndBottomBar;
   final Function onLoadEnd;
+  final ValueNotifier<List<NativeBookmark>> bookmarksNotifier;
 
   const NativeEpubPlayer({
     super.key,
@@ -61,6 +62,7 @@ class NativeEpubPlayer extends ConsumerStatefulWidget {
     this.cfi,
     required this.showOrHideAppBarAndBottomBar,
     required this.onLoadEnd,
+    required this.bookmarksNotifier,
   });
 
   @override
@@ -84,9 +86,11 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
   Timer? _statusTimer;
   double _chapterScrollProgress = 0.0;
 
-  // Bookmarks - use ValueNotifier for reactive updates
-  final ValueNotifier<List<NativeBookmark>> _bookmarksNotifier =
-      ValueNotifier([]);
+  // Uses widget.bookmarksNotifier
+  ValueNotifier<List<NativeBookmark>> get _bookmarksNotifier =>
+      widget.bookmarksNotifier;
+  ValueNotifier<List<NativeBookmark>> get bookmarksNotifier =>
+      widget.bookmarksNotifier;
 
   // Expose for reading_page
   NativeEpubParser? get parser => _parser;
@@ -99,8 +103,6 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
   int get currentChapterIndex => _currentChapterIndex;
   List<TocItem> get toc => _parser?.toc ?? [];
   List<NativeBookmark> get bookmarks => _bookmarksNotifier.value;
-  ValueNotifier<List<NativeBookmark>> get bookmarksNotifier =>
-      _bookmarksNotifier;
 
   @override
   void initState() {
@@ -173,41 +175,19 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     await _updateProgress();
   }
 
-  Future<void> _loadBookmarks() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'bookmarks_${widget.book.id}';
-    final data = prefs.getString(key);
-    if (data != null) {
-      final list = jsonDecode(data) as List;
-      _bookmarksNotifier.value =
-          list.map((e) => NativeBookmark.fromJson(e)).toList();
-    }
-  }
-
-  Future<void> _saveBookmarks() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'bookmarks_${widget.book.id}';
-    await prefs.setString(key,
-        jsonEncode(_bookmarksNotifier.value.map((e) => e.toJson()).toList()));
-  }
-
-  void addBookmark() {
+  NativeBookmark createBookmarkData() {
     final progress = (percentage * 100).toStringAsFixed(0);
     final now = DateTime.now();
     final label = '${now.year % 100}.${now.month}.${now.day}-$progress%';
 
-    final bookmark = NativeBookmark(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+    return NativeBookmark(
+      id: '', // ID will be assigned by DB
       chapterIndex: _currentChapterIndex,
       scrollPosition:
           _scrollController.hasClients ? _scrollController.offset : 0,
       label: label,
       createdAt: now,
     );
-
-    // Use ValueNotifier for reactive updates (no setState needed)
-    _bookmarksNotifier.value = [..._bookmarksNotifier.value, bookmark];
-    _saveBookmarks();
   }
 
   void goToBookmark(NativeBookmark bookmark) {
@@ -217,13 +197,6 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
         _scrollController.jumpTo(bookmark.scrollPosition);
       }
     });
-  }
-
-  void deleteBookmark(String id) {
-    // Use ValueNotifier for reactive updates (no setState needed)
-    _bookmarksNotifier.value =
-        _bookmarksNotifier.value.where((b) => b.id != id).toList();
-    _saveBookmarks();
   }
 
   int _parseChapterFromCfi(String cfi) {
@@ -313,7 +286,6 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     _updateProgress();
     _scrollController.dispose();
     _statusTimer?.cancel();
-    _bookmarksNotifier.dispose();
     super.dispose();
   }
 

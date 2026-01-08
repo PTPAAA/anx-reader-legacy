@@ -4,23 +4,28 @@ import 'package:anx_reader/page/book_player/native_epub_player.dart';
 /// Native bookmark widget for iOS reader
 /// Uses ValueListenableBuilder for reactive updates without full widget rebuilds
 class NativeBookmarkWidget extends StatelessWidget {
-  final GlobalKey<NativeEpubPlayerState> nativePlayerKey;
+  final ValueNotifier<List<NativeBookmark>> bookmarksNotifier;
+  final VoidCallback onAddBookmark;
+  final Function(String) onDeleteBookmark;
+  final Function(NativeBookmark) onGoToBookmark;
+  final String? Function(int) getChapterTitle;
   final Function(bool) hideAppBarAndBottomBar;
   final VoidCallback closeDrawer;
 
   const NativeBookmarkWidget({
     super.key,
-    required this.nativePlayerKey,
+    required this.bookmarksNotifier,
+    required this.onAddBookmark,
+    required this.onDeleteBookmark,
+    required this.onGoToBookmark,
+    required this.getChapterTitle,
     required this.hideAppBarAndBottomBar,
     required this.closeDrawer,
   });
 
   @override
   Widget build(BuildContext context) {
-    final playerState = nativePlayerKey.currentState;
-    if (playerState == null) {
-      return const Center(child: Text('书签加载中...'));
-    }
+    // Decoupled from playerState checks
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,10 +42,7 @@ class NativeBookmarkWidget extends StatelessWidget {
                     ),
               ),
               FilledButton.tonalIcon(
-                onPressed: () {
-                  playerState.addBookmark();
-                  // No setState needed - ValueNotifier handles updates
-                },
+                onPressed: onAddBookmark,
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('添加'),
               ),
@@ -51,7 +53,7 @@ class NativeBookmarkWidget extends StatelessWidget {
         // Use ValueListenableBuilder for reactive bookmark list updates
         Expanded(
           child: ValueListenableBuilder<List<NativeBookmark>>(
-            valueListenable: playerState.bookmarksNotifier,
+            valueListenable: bookmarksNotifier,
             builder: (context, bookmarks, child) {
               if (bookmarks.isEmpty) {
                 return const Center(
@@ -92,22 +94,17 @@ class NativeBookmarkWidget extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                     subtitle: Text(
-                      playerState
-                              .parser?.chapters[bookmark.chapterIndex].title ??
-                          '',
+                      getChapterTitle(bookmark.chapterIndex) ?? '',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12),
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, size: 20),
-                      onPressed: () {
-                        playerState.deleteBookmark(bookmark.id);
-                        // No setState needed - ValueNotifier handles updates
-                      },
+                      onPressed: () => onDeleteBookmark(bookmark.id),
                     ),
                     onTap: () {
-                      playerState.goToBookmark(bookmark);
+                      onGoToBookmark(bookmark);
                       closeDrawer();
                       hideAppBarAndBottomBar(false);
                     },
