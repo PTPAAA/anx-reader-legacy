@@ -35,6 +35,7 @@ import 'package:anx_reader/utils/js/convert_dart_color_to_js.dart';
 import 'package:anx_reader/models/book_note.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/utils/webView/gererate_url.dart';
+import 'package:anx_reader/utils/webView/local_server_mock.dart';
 import 'package:anx_reader/utils/webView/webview_console_message.dart';
 import 'package:anx_reader/widgets/bookshelf/book_cover.dart';
 import 'package:anx_reader/widgets/context_menu/context_menu.dart';
@@ -1003,8 +1004,8 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     );
   }
 
-  Widget buildWebviewWithIOSWorkaround(
-      BuildContext context, String url, String initialCfi) {
+  Widget buildWebviewWithIOSWorkaround(BuildContext context, String url,
+      String initialCfi, String? indexHtmlPath) {
     final webView = InAppWebView(
       webViewEnvironment: webViewEnvironment,
       initialUrlRequest: URLRequest(
@@ -1014,6 +1015,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
             initialCfi,
             backgroundColor: backgroundColor,
             textColor: textColor,
+            indexHtmlPath: indexHtmlPath,
           ),
         ),
       ),
@@ -1052,8 +1054,25 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   @override
   Widget build(BuildContext context) {
-    String uri = Uri.encodeComponent(widget.book.fileFullPath);
-    String url = 'http://127.0.0.1:${Server().port}/book/$uri';
+    if (!_isReady) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    String url;
+    String? indexHtmlPath;
+
+    if (Platform.isIOS && _localIndexHtmlPath != null) {
+      // iOS Native Mode: Use file:// for everything
+      url = 'file://${widget.book.fileFullPath}';
+      indexHtmlPath = _localIndexHtmlPath;
+    } else {
+      // Regular Server Mode
+      String uri = Uri.encodeComponent(widget.book.fileFullPath);
+      url = 'http://127.0.0.1:${Server().port}/book/$uri';
+    }
+
     String initialCfi = widget.cfi ?? widget.book.lastReadPosition;
 
     return Listener(
@@ -1064,7 +1083,8 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
-            buildWebviewWithIOSWorkaround(context, url, initialCfi),
+            buildWebviewWithIOSWorkaround(
+                context, url, initialCfi, indexHtmlPath),
             readingInfoWidget(),
             if (showHistory)
               Positioned(

@@ -34,6 +34,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'book_player/book_player_server.dart';
+import 'package:anx_reader/service/book_parser.dart';
 
 AnxHeadlessWebView? headlessInAppWebView;
 final allowBookExtensions = ["epub", "mobi", "azw3", "fb2", "txt", "pdf"];
@@ -505,74 +506,32 @@ Future<void> getBookMetadata(
   String? md5,
   WidgetRef? ref,
 }) async {
-  String serverFileName = Server().setTempFile(file);
+  AnxLog.info("import start: ${file.path}");
 
-  String cfi = '';
+  try {
+    // New Native Import Logic using BookParser
+    final metadata = await BookParser.parseEpubMetadata(file);
 
-  String bookUrl = "http://127.0.0.1:${Server().port}/$serverFileName";
-  AnxLog.info("import start: book url: $bookUrl");
+    String title = metadata['title'] ?? 'Unknown';
+    String author = metadata['author'] ?? 'Unknown';
+    String description = metadata['description'] ?? '';
+    String cover = metadata['cover'] ?? '';
 
-  AnxHeadlessWebView webview = AnxHeadlessWebView(
-    webViewEnvironment: webViewEnvironment,
-    initialUrlRequest: URLRequest(
-        url: WebUri(generateUrl(
-      bookUrl,
-      cfi,
-      importing: true,
-    ))),
-    onLoadStop: (controller, url) async {
-      controller.addJavaScriptHandler(
-          handlerName: 'onMetadata',
-          callback: (args) async {
-            Map<String, dynamic> metadata = args[0];
-            String title = metadata['title'] ?? 'Unknown';
-            dynamic authorData = metadata['author'];
-            String author = authorData is String
-                ? authorData
-                : authorData
-                        ?.map((author) =>
-                            author is String ? author : author['name'])
-                        ?.join(', ') ??
-                    'Unknown';
+    await saveBook(
+      file,
+      title,
+      author,
+      description,
+      md5,
+      cover,
+      provideBook: book,
+    );
 
-            // base64 cover
-            String cover = metadata['cover'] ?? '';
-            String description = metadata['description'] ?? '';
-            saveBook(
-              file,
-              title,
-              author,
-              description,
-              md5,
-              cover,
-              provideBook: book,
-            );
-            ref?.read(bookListProvider.notifier).refresh();
-            // return;
-          });
-    },
-    onConsoleMessage: (controller, consoleMessage) {
-      if (consoleMessage.messageLevel == ConsoleMessageLevel.ERROR) {
-        headlessInAppWebView?.dispose();
-        headlessInAppWebView = null;
-        throw Exception('Webview: ${consoleMessage.message}');
-      }
-      webviewConsoleMessage(controller, consoleMessage);
-    },
-  );
-
-  await webview.run();
-  headlessInAppWebView = webview;
-  // max 30s
-  int count = 0;
-  while (count < 300) {
-    if (headlessInAppWebView == null) {
-      return;
-    }
-    await Future.delayed(const Duration(milliseconds: 100));
-    count++;
+    ref?.read(bookListProvider.notifier).refresh();
+  } catch (e) {
+    AnxLog.severe('Import: Failed native parsing, fallback or error: $e');
+    // If native parsing fails, we could theoretically try WebView,
+    // but since we are removing WebView dependency for stability, we just throw/toast.
+    throw Exception('Import: Failed to parse book metadata: $e');
   }
-  await headlessInAppWebView?.dispose();
-  headlessInAppWebView = null;
-  throw Exception('Import: Get book metadata timeout');
 }

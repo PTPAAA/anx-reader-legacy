@@ -16,9 +16,16 @@ String generateUrl(
   String? fontPath,
   String? backgroundColor,
   bool? importing,
+  String? indexHtmlPath,
 }) {
-  String indexHtmlPath =
-      "http://127.0.0.1:${Server().port}/foliate-js/index.html";
+  indexHtmlPath ??= "http://127.0.0.1:${Server().port}/foliate-js/index.html";
+
+  // Refactor hook: Allow overriding for file:// access
+  if (url.startsWith('file://')) {
+    // We will handle the base path in EpubPlayer, but for now,
+    // let's assume we might need to change this.
+    // However, keeping existing logic for Server-based loading by default.
+  }
 
   ReadTheme readTheme = Prefs().readTheme;
   bookStyle ??= Prefs().bookStyle;
