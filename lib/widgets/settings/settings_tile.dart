@@ -224,7 +224,7 @@ class AndroidSettingsTile extends StatelessWidget {
                       child: Switch(
                         value: initialValue,
                         onChanged: onToggle,
-                        activeThumbColor: enabled
+                        activeColor: enabled
                             ? activeSwitchColor
                             : Theme.of(context).disabledColor,
                       ),
@@ -237,7 +237,7 @@ class AndroidSettingsTile extends StatelessWidget {
                   child: Switch(
                     value: initialValue,
                     onChanged: onToggle,
-                    activeThumbColor: enabled
+                    activeColor: enabled
                         ? activeSwitchColor
                         : Theme.of(context).disabledColor,
                   ),
