@@ -215,10 +215,43 @@ class NativeEpubParser {
   }
 
   /// Extract resource (images, css) by href
+  /// Handles relative and absolute paths within EPUB
   List<int>? getResource(String href) {
-    final path = _opfDir + href;
-    final file = _archive.findFile(path);
-    return file?.content as List<int>?;
+    // Normalize path - remove leading ../ and ./
+    String normalizedHref = href;
+    while (normalizedHref.startsWith('../')) {
+      normalizedHref = normalizedHref.substring(3);
+    }
+    while (normalizedHref.startsWith('./')) {
+      normalizedHref = normalizedHref.substring(2);
+    }
+
+    // Try different path combinations
+    final pathsToTry = [
+      _opfDir + normalizedHref,
+      normalizedHref,
+      'OEBPS/' + normalizedHref,
+      'OPS/' + normalizedHref,
+    ];
+
+    for (final path in pathsToTry) {
+      final file = _archive.findFile(path);
+      if (file != null) {
+        return file.content as List<int>?;
+      }
+    }
+    return null;
+  }
+
+  /// Get the base directory for a chapter (for resolving relative image paths)
+  String getChapterDir(int chapterIndex) {
+    if (chapterIndex < 0 || chapterIndex >= chapters.length) return _opfDir;
+    final chapter = chapters[chapterIndex];
+    if (chapter.href.contains('/')) {
+      return _opfDir +
+          chapter.href.substring(0, chapter.href.lastIndexOf('/') + 1);
+    }
+    return _opfDir;
   }
 }
 

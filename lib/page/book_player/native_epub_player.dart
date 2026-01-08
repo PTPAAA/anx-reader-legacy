@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:battery_plus/battery_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/service/native_epub_parser.dart';
 import 'package:anx_reader/config/shared_preference_provider.dart';
@@ -12,8 +15,40 @@ import 'package:anx_reader/providers/book_list.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:intl/intl.dart';
 
+/// Bookmark model for native reader
+class NativeBookmark {
+  final String id;
+  final int chapterIndex;
+  final double scrollPosition;
+  final String label;
+  final DateTime createdAt;
+
+  NativeBookmark({
+    required this.id,
+    required this.chapterIndex,
+    required this.scrollPosition,
+    required this.label,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'chapterIndex': chapterIndex,
+        'scrollPosition': scrollPosition,
+        'label': label,
+        'createdAt': createdAt.toIso8601String(),
+      };
+
+  factory NativeBookmark.fromJson(Map<String, dynamic> json) => NativeBookmark(
+        id: json['id'],
+        chapterIndex: json['chapterIndex'],
+        scrollPosition: json['scrollPosition'],
+        label: json['label'],
+        createdAt: DateTime.parse(json['createdAt']),
+      );
+}
+
 /// Native EPUB reader widget for iOS 14 compatibility
-/// Uses flutter_html instead of WebView/foliate-js
 class NativeEpubPlayer extends ConsumerStatefulWidget {
   final Book book;
   final String? cfi;
@@ -40,13 +75,19 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
   final ScrollController _scrollController = ScrollController();
   bool _showControls = false;
 
-  // Status bar info
+  // Cached HTML for performance
+  final Map<int, String> _processedHtmlCache = {};
+
+  // Status bar
   int _batteryLevel = 100;
   String _currentTime = '';
   Timer? _statusTimer;
   double _chapterScrollProgress = 0.0;
 
-  // Expose for reading_page integration
+  // Bookmarks
+  List<NativeBookmark> _bookmarks = [];
+
+  // Expose for reading_page
   NativeEpubParser? get parser => _parser;
   String get chapterTitle => _parser?.chapters.isNotEmpty == true
       ? _parser!.chapters[_currentChapterIndex].title
@@ -56,6 +97,7 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
       : (_currentChapterIndex + 1) / _parser!.chapters.length;
   int get currentChapterIndex => _currentChapterIndex;
   List<TocItem> get toc => _parser?.toc ?? [];
+  List<NativeBookmark> get bookmarks => _bookmarks;
 
   @override
   void initState() {
@@ -67,15 +109,13 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
 
   void _startStatusUpdates() {
     _updateStatus();
-    _statusTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      _updateStatus();
-    });
+    _statusTimer =
+        Timer.periodic(const Duration(seconds: 30), (_) => _updateStatus());
   }
 
   Future<void> _updateStatus() async {
     try {
-      final battery = Battery();
-      final level = await battery.batteryLevel;
+      final level = await Battery().batteryLevel;
       if (mounted) {
         setState(() {
           _batteryLevel = level;
@@ -84,9 +124,8 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _currentTime = DateFormat('HH:mm').format(DateTime.now());
-        });
+        setState(
+            () => _currentTime = DateFormat('HH:mm').format(DateTime.now()));
       }
     }
   }
@@ -95,9 +134,10 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     if (_scrollController.hasClients) {
       final maxScroll = _scrollController.position.maxScrollExtent;
       if (maxScroll > 0) {
-        setState(() {
-          _chapterScrollProgress = _scrollController.offset / maxScroll;
-        });
+        final progress = _scrollController.offset / maxScroll;
+        if ((progress - _chapterScrollProgress).abs() > 0.01) {
+          setState(() => _chapterScrollProgress = progress);
+        }
       }
     }
   }
@@ -107,17 +147,16 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
       final file = File(widget.book.fileFullPath);
       _parser = NativeEpubParser(file);
       await _parser!.parse();
+      await _loadBookmarks();
 
       final cfi = widget.cfi ?? widget.book.lastReadPosition;
       if (cfi.isNotEmpty) {
         _currentChapterIndex = _parseChapterFromCfi(cfi);
       }
 
-      setState(() {
-        _isLoading = false;
-      });
-
+      setState(() => _isLoading = false);
       widget.onLoadEnd();
+      _updateProgress();
     } catch (e) {
       AnxLog.severe('NativeEpubPlayer: Failed to load book: $e');
       setState(() {
@@ -127,25 +166,68 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     }
   }
 
+  Future<void> _loadBookmarks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'bookmarks_${widget.book.id}';
+    final data = prefs.getString(key);
+    if (data != null) {
+      final list = jsonDecode(data) as List;
+      _bookmarks = list.map((e) => NativeBookmark.fromJson(e)).toList();
+    }
+  }
+
+  Future<void> _saveBookmarks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'bookmarks_${widget.book.id}';
+    await prefs.setString(
+        key, jsonEncode(_bookmarks.map((e) => e.toJson()).toList()));
+  }
+
+  void addBookmark() {
+    final progress = (percentage * 100).toStringAsFixed(0);
+    final now = DateTime.now();
+    final label = '${now.year % 100}.${now.month}.${now.day}-$progress%';
+
+    final bookmark = NativeBookmark(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      chapterIndex: _currentChapterIndex,
+      scrollPosition:
+          _scrollController.hasClients ? _scrollController.offset : 0,
+      label: label,
+      createdAt: now,
+    );
+
+    setState(() => _bookmarks.add(bookmark));
+    _saveBookmarks();
+  }
+
+  void goToBookmark(NativeBookmark bookmark) {
+    goToChapter(bookmark.chapterIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(bookmark.scrollPosition);
+      }
+    });
+  }
+
+  void deleteBookmark(String id) {
+    setState(() => _bookmarks.removeWhere((b) => b.id == id));
+    _saveBookmarks();
+  }
+
   int _parseChapterFromCfi(String cfi) {
     try {
       final match = RegExp(r'/6/(\d+)').firstMatch(cfi);
       if (match != null) {
-        final chapterNum = int.parse(match.group(1)!);
-        return (chapterNum ~/ 2) - 1;
+        return (int.parse(match.group(1)!) ~/ 2) - 1;
       }
-    } catch (e) {
-      AnxLog.warning('NativeEpubPlayer: Failed to parse CFI: $cfi');
-    }
+    } catch (e) {}
     return 0;
   }
 
-  String _generateCfi() {
-    final chapterNum = (_currentChapterIndex + 1) * 2;
-    return 'epubcfi(/6/$chapterNum)';
-  }
+  String _generateCfi() => 'epubcfi(/6/${(_currentChapterIndex + 1) * 2})';
 
-  Future<void> _saveProgress() async {
+  Future<void> _updateProgress() async {
     if (_parser == null) return;
 
     final cfi = _generateCfi();
@@ -164,34 +246,15 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
   }
 
   void goToChapter(int index) {
-    if (_parser == null) return;
-    if (index < 0 || index >= _parser!.chapters.length) return;
+    if (_parser == null || index < 0 || index >= _parser!.chapters.length)
+      return;
 
     setState(() {
       _currentChapterIndex = index;
       _chapterScrollProgress = 0;
     });
     _scrollController.jumpTo(0);
-  }
-
-  void _nextChapter() {
-    if (_parser == null) return;
-    if (_currentChapterIndex < _parser!.chapters.length - 1) {
-      goToChapter(_currentChapterIndex + 1);
-    }
-  }
-
-  void _prevChapter() {
-    if (_currentChapterIndex > 0) {
-      goToChapter(_currentChapterIndex - 1);
-    }
-  }
-
-  void _toggleControls() {
-    setState(() {
-      _showControls = !_showControls;
-    });
-    widget.showOrHideAppBarAndBottomBar(_showControls);
+    _updateProgress();
   }
 
   void _scrollPage(bool forward) {
@@ -199,35 +262,43 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
 
     final pageHeight = MediaQuery.of(context).size.height * 0.85;
     final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentOffset = _scrollController.offset;
+    final offset = _scrollController.offset;
 
     if (forward) {
-      if (currentOffset >= maxScroll - 10) {
-        _nextChapter();
+      if (offset >= maxScroll - 10) {
+        if (_currentChapterIndex < _parser!.chapters.length - 1) {
+          goToChapter(_currentChapterIndex + 1);
+        }
       } else {
         _scrollController.animateTo(
-          (currentOffset + pageHeight).clamp(0, maxScroll),
-          duration: const Duration(milliseconds: 250),
+          (offset + pageHeight).clamp(0, maxScroll),
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       }
     } else {
-      if (currentOffset <= 10) {
-        _prevChapter();
+      if (offset <= 10) {
+        if (_currentChapterIndex > 0) {
+          goToChapter(_currentChapterIndex - 1);
+        }
       } else {
         _scrollController.animateTo(
-          (currentOffset - pageHeight).clamp(0, maxScroll),
-          duration: const Duration(milliseconds: 250),
+          (offset - pageHeight).clamp(0, maxScroll),
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       }
     }
   }
 
+  void _toggleControls() {
+    setState(() => _showControls = !_showControls);
+    widget.showOrHideAppBarAndBottomBar(_showControls);
+  }
+
   @override
   void dispose() {
-    _saveProgress();
-    _scrollController.removeListener(_onScroll);
+    _updateProgress();
     _scrollController.dispose();
     _statusTimer?.cancel();
     super.dispose();
@@ -250,18 +321,11 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline,
-                  size: 64, color: Theme.of(context).colorScheme.error),
+              Icon(Icons.error_outline, size: 64, color: Colors.red),
               const SizedBox(height: 16),
               Text('加载失败', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('返回'),
-              ),
             ],
           ),
         ),
@@ -277,220 +341,188 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     }
 
     final prefs = Prefs();
-    final theme = prefs.readTheme;
     final style = prefs.bookStyle;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final bgColor = isDarkMode
-        ? const Color(0xFF1A1A1A)
-        : Color(int.parse('0xFF${theme.backgroundColor}'));
-    final textColor = isDarkMode
-        ? const Color(0xFFE0E0E0)
-        : Color(int.parse('0xFF${theme.textColor}'));
+    final bgColor = isDark ? const Color(0xFF1A1A1A) : const Color(0xFFFAF8F5);
+    final textColor =
+        isDark ? const Color(0xFFE0E0E0) : const Color(0xFF333333);
 
     return Container(
       color: bgColor,
       child: Column(
         children: [
-          // Main content area with tap zones
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTapUp: (details) {
-                final size = MediaQuery.of(context).size;
-                final tapX = details.localPosition.dx;
-                final tapY = details.localPosition.dy;
-
-                // Bottom corners for page turning
-                if (tapY > size.height * 0.7) {
-                  if (tapX < size.width * 0.3) {
-                    _scrollPage(false); // prev
-                  } else if (tapX > size.width * 0.7) {
-                    _scrollPage(true); // next
-                  } else {
-                    _toggleControls();
-                  }
-                }
-                // Middle area for controls
-                else if (tapY > size.height * 0.3) {
-                  if (tapX > size.width * 0.25 && tapX < size.width * 0.75) {
-                    _toggleControls();
-                  } else if (tapX < size.width * 0.25) {
-                    _scrollPage(false);
-                  } else {
-                    _scrollPage(true);
-                  }
-                }
-                // Top area
-                else {
-                  if (tapX < size.width * 0.3) {
-                    _scrollPage(false);
-                  } else if (tapX > size.width * 0.7) {
-                    _scrollPage(true);
-                  } else {
-                    _toggleControls();
-                  }
-                }
-              },
-              child: _buildChapterView(
-                _parser!.chapters[_currentChapterIndex],
-                bgColor,
-                textColor,
-                style,
-              ),
+              onTapUp: (d) => _handleTap(d, MediaQuery.of(context).size),
+              child: _buildChapterView(bgColor, textColor, style),
             ),
           ),
-          // Status bar
           _buildStatusBar(bgColor, textColor),
         ],
       ),
     );
   }
 
-  Widget _buildStatusBar(Color bgColor, Color textColor) {
-    final mutedColor = textColor.withOpacity(0.5);
-    final chapterProgress = _parser!.chapters.isEmpty
+  void _handleTap(TapUpDetails d, Size size) {
+    final x = d.localPosition.dx;
+    final y = d.localPosition.dy;
+
+    // Bottom corners for page turn
+    if (y > size.height * 0.7) {
+      if (x < size.width * 0.3)
+        _scrollPage(false);
+      else if (x > size.width * 0.7)
+        _scrollPage(true);
+      else
+        _toggleControls();
+    }
+    // Side areas
+    else if (x < size.width * 0.25)
+      _scrollPage(false);
+    else if (x > size.width * 0.75)
+      _scrollPage(true);
+    else
+      _toggleControls();
+  }
+
+  Widget _buildStatusBar(Color bg, Color text) {
+    final muted = text.withOpacity(0.5);
+    final progress = _parser!.chapters.isEmpty
         ? 0.0
         : (_currentChapterIndex + _chapterScrollProgress) /
             _parser!.chapters.length;
 
     return Container(
-      color: bgColor,
+      color: bg,
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
-        top: 8,
+        bottom: MediaQuery.of(context).padding.bottom + 6,
+        top: 6,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Battery
-          Row(
-            children: [
-              Icon(
-                _batteryLevel > 80
-                    ? Icons.battery_full
-                    : _batteryLevel > 50
-                        ? Icons.battery_5_bar
-                        : _batteryLevel > 20
-                            ? Icons.battery_3_bar
-                            : Icons.battery_1_bar,
-                size: 16,
-                color: mutedColor,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '$_batteryLevel%',
-                style: TextStyle(fontSize: 12, color: mutedColor),
-              ),
-            ],
-          ),
-          // Chapter progress
+          Row(children: [
+            Icon(Icons.battery_std, size: 14, color: muted),
+            const SizedBox(width: 4),
+            Text('$_batteryLevel%',
+                style: TextStyle(fontSize: 11, color: muted)),
+          ]),
           Text(
-            '${_currentChapterIndex + 1}/${_parser!.chapters.length} · ${(chapterProgress * 100).toStringAsFixed(1)}%',
-            style: TextStyle(fontSize: 12, color: mutedColor),
+            '${_currentChapterIndex + 1}/${_parser!.chapters.length} · ${(progress * 100).toStringAsFixed(0)}%',
+            style: TextStyle(fontSize: 11, color: muted),
           ),
-          // Time
-          Text(
-            _currentTime,
-            style: TextStyle(fontSize: 12, color: mutedColor),
-          ),
+          Text(_currentTime, style: TextStyle(fontSize: 11, color: muted)),
         ],
       ),
     );
   }
 
-  Widget _buildChapterView(
-      EpubChapter chapter, Color bgColor, Color textColor, dynamic style) {
-    final baseFontSize = (style.fontSize as num).toDouble();
-    final actualFontSize = baseFontSize < 16 ? 18.0 : baseFontSize;
-    final lineHeight = (style.lineHeight as num).toDouble();
-    final actualLineHeight = lineHeight < 1.5 ? 1.6 : lineHeight;
-    final sideMargin = (style.sideMargin as num).toDouble();
+  Widget _buildChapterView(Color bg, Color text, dynamic style) {
+    final chapter = _parser!.chapters[_currentChapterIndex];
 
-    return SingleChildScrollView(
-      controller: _scrollController,
-      physics: const ClampingScrollPhysics(),
-      padding: EdgeInsets.symmetric(
-        horizontal: sideMargin > 0 ? sideMargin : 20,
-        vertical: 16,
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Chapter title
-            Container(
-              padding: const EdgeInsets.only(bottom: 24, top: 8),
-              child: Text(
-                chapter.title,
-                style: TextStyle(
-                  fontSize: actualFontSize + 6,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                  height: 1.3,
+    // BookStyle stores fontSize as multiplier (1.0 = 16px, 1.4 = 22px)
+    // lineHeight and sideMargin are stored as their actual values
+    final fontMult =
+        ((style.fontSize as num?) ?? 1.4).toDouble().clamp(0.8, 2.5);
+    final fontSize = fontMult * 16; // Convert multiplier to pixels
+    final lineHeight =
+        ((style.lineHeight as num?) ?? 1.6).toDouble().clamp(1.2, 2.5);
+    final margin =
+        ((style.sideMargin as num?) ?? 20).toDouble().clamp(8.0, 40.0);
+
+    // Use cached HTML
+    final html = _processedHtmlCache[_currentChapterIndex] ??=
+        _preprocessHtml(chapter.htmlContent);
+
+    return RepaintBoundary(
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        physics: const ClampingScrollPhysics(),
+        padding: EdgeInsets.symmetric(horizontal: margin, vertical: 16),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Chapter title
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20, top: 8),
+                child: Text(
+                  chapter.title,
+                  style: TextStyle(
+                    fontSize: fontSize + 4,
+                    fontWeight: FontWeight.w600,
+                    color: text,
+                    height: 1.3,
+                  ),
                 ),
               ),
-            ),
-            // Chapter content
-            Html(
-              data: _preprocessHtml(chapter.htmlContent),
-              style: {
-                "body": Style(
-                  fontSize: FontSize(actualFontSize),
-                  color: textColor,
-                  lineHeight: LineHeight(actualLineHeight),
-                  textAlign: TextAlign.justify,
-                  padding: HtmlPaddings.zero,
-                  margin: Margins.zero,
-                ),
-                "p": Style(
-                  fontSize: FontSize(actualFontSize),
-                  color: textColor,
-                  lineHeight: LineHeight(actualLineHeight),
-                  margin: Margins(bottom: Margin(actualFontSize * 0.8)),
-                ),
-                "h1, h2, h3": Style(
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                  margin: Margins(top: Margin(16), bottom: Margin(12)),
-                ),
-                "img": Style(
-                  width: Width(
-                      MediaQuery.of(context).size.width - sideMargin * 2 - 40),
-                  margin: Margins(top: Margin(16), bottom: Margin(16)),
-                ),
-                "a": Style(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              },
-              onLinkTap: (url, _, __) {
-                if (url != null && !url.startsWith('http')) {
-                  final chapterIndex = _parser!.chapters.indexWhere((c) =>
-                      url.contains(c.href) ||
-                      c.href.contains(url.split('#').first));
-                  if (chapterIndex >= 0) {
-                    goToChapter(chapterIndex);
+              // Content
+              Html(
+                data: html,
+                style: {
+                  "*": Style(
+                    fontSize: FontSize(fontSize),
+                    color: text,
+                    lineHeight: LineHeight(lineHeight),
+                    margin: Margins.zero,
+                    padding: HtmlPaddings.zero,
+                  ),
+                  "p": Style(
+                    margin: Margins(bottom: Margin(fontSize * 0.7)),
+                  ),
+                  "img": Style(
+                    width:
+                        Width(MediaQuery.of(context).size.width - margin * 2),
+                  ),
+                },
+                extensions: [
+                  ImageExtension(
+                    builder: (ctx) => _buildImage(ctx.attributes['src'] ?? ''),
+                  ),
+                ],
+                onLinkTap: (url, _, __) {
+                  if (url != null && !url.startsWith('http')) {
+                    final idx = _parser!.chapters.indexWhere((c) =>
+                        url.contains(c.href) ||
+                        c.href.contains(url.split('#').first));
+                    if (idx >= 0) goToChapter(idx);
                   }
-                }
-              },
-            ),
-            // Bottom padding for comfortable reading
-            const SizedBox(height: 100),
-          ],
+                },
+              ),
+              const SizedBox(height: 80),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildImage(String src) {
+    if (src.isEmpty) return const SizedBox.shrink();
+
+    // Try to load from EPUB archive
+    final imageData = _parser?.getResource(src);
+    if (imageData != null) {
+      return Image.memory(
+        Uint8List.fromList(imageData),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   String _preprocessHtml(String html) {
     return html
         .replaceAll(RegExp(r'<\?xml[^>]*\?>'), '')
         .replaceAll(RegExp(r'<!DOCTYPE[^>]*>'), '')
-        .replaceAll(RegExp(r'<html[^>]*>'), '<div>')
-        .replaceAll(RegExp(r'</html>'), '</div>')
+        .replaceAll(RegExp(r'<html[^>]*>'), '')
+        .replaceAll(RegExp(r'</html>'), '')
         .replaceAll(RegExp(r'<head>.*?</head>', dotAll: true), '')
         .replaceAll(RegExp(r'<body[^>]*>'), '')
         .replaceAll(RegExp(r'</body>'), '');

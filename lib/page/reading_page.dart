@@ -24,6 +24,8 @@ import 'package:anx_reader/widgets/reading_page/tts_widget.dart';
 import 'package:anx_reader/widgets/reading_page/style_widget.dart';
 import 'package:anx_reader/widgets/reading_page/toc_widget.dart';
 import 'package:anx_reader/widgets/reading_page/native_toc_widget.dart';
+import 'package:anx_reader/widgets/reading_page/native_bookmark_widget.dart';
+import 'package:anx_reader/widgets/reading_page/native_style_widget.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -440,6 +442,22 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                                       icon: const Icon(Icons.toc),
                                       onPressed: tocHandler,
                                     ),
+                                    // Bookmark button for iOS
+                                    if (Platform.isIOS)
+                                      IconButton(
+                                        icon:
+                                            const Icon(Icons.bookmark_outline),
+                                        onPressed: () {
+                                          setState(() {
+                                            _currentPage = NativeBookmarkWidget(
+                                              nativePlayerKey: nativePlayerKey,
+                                              hideAppBarAndBottomBar:
+                                                  showOrHideAppBarAndBottomBar,
+                                              closeDrawer: () {},
+                                            );
+                                          });
+                                        },
+                                      ),
                                     // Hide notes on iOS (not supported in native reader)
                                     if (!Platform.isIOS)
                                       IconButton(
@@ -455,7 +473,16 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                                     IconButton(
                                       icon: const Icon(Icons.color_lens),
                                       onPressed: () {
-                                        styleHandler(setState);
+                                        if (Platform.isIOS) {
+                                          setState(() {
+                                            _currentPage = NativeStyleWidget(
+                                              onStyleChanged: () =>
+                                                  setState(() {}),
+                                            );
+                                          });
+                                        } else {
+                                          styleHandler(setState);
+                                        }
                                       },
                                     ),
                                     // Hide TTS on iOS (not supported in native reader)
