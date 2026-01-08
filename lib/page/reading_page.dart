@@ -7,11 +7,13 @@ import 'package:anx_reader/dao/theme.dart';
 import 'package:anx_reader/enums/sync_direction.dart';
 import 'package:anx_reader/enums/sync_trigger.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
+import 'dart:io';
 import 'package:anx_reader/main.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/models/read_theme.dart';
 import 'package:anx_reader/page/book_detail.dart';
 import 'package:anx_reader/page/book_player/epub_player.dart';
+import 'package:anx_reader/page/book_player/native_epub_player.dart';
 import 'package:anx_reader/providers/sync.dart';
 import 'package:anx_reader/utils/toast/common.dart';
 import 'package:anx_reader/utils/ui/status_bar.dart';
@@ -508,16 +510,27 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                     onKeyEvent: _handleReaderKeyEvent,
                     child: Stack(
                       children: [
-                        EpubPlayer(
-                          key: epubPlayerKey,
-                          book: _book,
-                          cfi: widget.cfi,
-                          showOrHideAppBarAndBottomBar:
-                              showOrHideAppBarAndBottomBar,
-                          onLoadEnd: onLoadEnd,
-                          initialThemes: widget.initialThemes,
-                          updateParent: updateState,
-                        ),
+                        // Use NativeEpubPlayer on iOS for compatibility
+                        // WebView-based EpubPlayer may have issues on iOS 14
+                        if (Platform.isIOS)
+                          NativeEpubPlayer(
+                            book: _book,
+                            cfi: widget.cfi,
+                            showOrHideAppBarAndBottomBar: (show) =>
+                                showOrHideAppBarAndBottomBar(show),
+                            onLoadEnd: onLoadEnd,
+                          )
+                        else
+                          EpubPlayer(
+                            key: epubPlayerKey,
+                            book: _book,
+                            cfi: widget.cfi,
+                            showOrHideAppBarAndBottomBar:
+                                showOrHideAppBarAndBottomBar,
+                            onLoadEnd: onLoadEnd,
+                            initialThemes: widget.initialThemes,
+                            updateParent: updateState,
+                          ),
                       ],
                     ),
                   ),
