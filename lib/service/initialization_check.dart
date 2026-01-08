@@ -57,7 +57,7 @@ class InitializationCheck {
     final cv = await currentVersion;
     // wait 0.8 seconds to ensure the app is ready
     Future.delayed(const Duration(milliseconds: 800), () {
-      showCupertinoSheet(
+      showCupertinoModalPopup(
         context: navigatorKey.currentContext!,
         builder: (context) => Scaffold(
           body: OnboardingScreen(
@@ -76,7 +76,7 @@ class InitializationCheck {
     final cv = await currentVersion;
     AnxLog.info('Version update detected: $lv -> $cv');
     Future.delayed(const Duration(milliseconds: 800), () {
-      showCupertinoSheet(
+      showCupertinoModalPopup(
         context: navigatorKey.currentContext!,
         builder: (context) => ChangelogScreen(
           lastVersion: lv,
