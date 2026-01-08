@@ -116,14 +116,6 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
         Timer.periodic(const Duration(seconds: 30), (_) => _updateStatus());
   }
 
-  @override
-  void dispose() {
-    _statusTimer?.cancel();
-    _scrollController.dispose();
-    _bookmarksNotifier.dispose();
-    super.dispose();
-  }
-
   Future<void> _updateStatus() async {
     try {
       final level = await Battery().batteryLevel;
