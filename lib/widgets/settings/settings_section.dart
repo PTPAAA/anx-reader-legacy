@@ -51,7 +51,7 @@ class SettingsSection extends AbstractSettingsSection {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: FilledContainer(
-            padding: EdgeInsetsGeometry.zero,
+            padding: EdgeInsets.zero,
             child: tileList,
           ),
         ),
