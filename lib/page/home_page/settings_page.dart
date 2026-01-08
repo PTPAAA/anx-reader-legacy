@@ -39,13 +39,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     fit: BoxFit.scaleDown,
                     child: Container(
                       constraints: const BoxConstraints(maxWidth: 500),
-                      child: Text(
-                        'Anx',
-                        style: TextStyle(
-                          fontSize: 130,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Anx',
+                            style: TextStyle(
+                              fontSize: 130,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          Text(
+                            'Legacy',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(context).colorScheme.secondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

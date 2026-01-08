@@ -7,7 +7,6 @@ import 'package:anx_reader/page/settings_page/developer/developer_options_page.d
 import 'package:anx_reader/utils/env_var.dart';
 import 'package:anx_reader/utils/toast/common.dart';
 import 'package:anx_reader/widgets/settings/link_icon.dart';
-import 'package:anx_reader/utils/check_update.dart';
 import 'package:anx_reader/widgets/settings/show_donate_dialog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -95,6 +94,8 @@ Future<void> openAboutDialog() async {
   final pubspecContent = await rootBundle.loadString('pubspec.yaml');
   final pubspec = Pubspec.parse(pubspecContent);
   final version = pubspec.version.toString();
+  // Clean version - remove build number
+  final cleanVersion = version.split('+').first;
 
   showDialog(
     context: navigatorKey.currentContext!,
@@ -111,33 +112,55 @@ Future<void> openAboutDialog() async {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Title: Anx Reader Legacy
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 0, 0, 5),
                   child: Center(
-                    child: Text(
-                      'Anx',
-                      style: TextStyle(
-                        fontSize: 50,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Anx Reader',
+                          style: TextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        Text(
+                          'Legacy',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.secondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
                 const Divider(),
+                // Version (without build number)
                 ListTile(
                   title: Text(L10n.of(context).appVersion),
-                  subtitle: Text(version + (kDebugMode ? ' (debug)' : '')),
+                  subtitle: Text(cleanVersion + (kDebugMode ? ' (debug)' : '')),
                   onTap: () {
-                    Clipboard.setData(ClipboardData(text: version));
+                    Clipboard.setData(ClipboardData(text: cleanVersion));
                     AnxToast.show(L10n.of(context).notesPageCopied);
                     _handleDeveloperUnlockTap(context);
                   },
                 ),
-                if (EnvVar.enableCheckUpdate)
-                  ListTile(
-                      title: Text(L10n.of(context).aboutCheckForUpdates),
-                      onTap: () => checkUpdate(true)),
+                // Original project link
+                ListTile(
+                  title: const Text('原项目'),
+                  subtitle: const Text('Anx Reader by Anxcye'),
+                  onTap: () {
+                    launchUrl(
+                      Uri.parse('https://github.com/Anxcye/anx-reader'),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  },
+                ),
+                // Donate
                 if (EnvVar.enableDonation)
                   ListTile(
                     title: Text(L10n.of(context).appDonate),
@@ -145,16 +168,18 @@ Future<void> openAboutDialog() async {
                       showDonateDialog(context);
                     },
                   ),
+                // License
                 ListTile(
                   title: Text(L10n.of(context).appLicense),
                   onTap: () {
                     showLicensePage(
                       context: context,
-                      applicationName: 'Anx',
-                      applicationVersion: version,
+                      applicationName: 'Anx Reader Legacy',
+                      applicationVersion: cleanVersion,
                     );
                   },
                 ),
+                // Author/Developer
                 ListTile(
                   title: Text(L10n.of(context).appAuthor),
                   onTap: () {
@@ -165,6 +190,7 @@ Future<void> openAboutDialog() async {
                     );
                   },
                 ),
+                // Privacy Policy
                 ListTile(
                   title: Text(L10n.of(context).aboutPrivacyPolicy),
                   onTap: () async {
@@ -174,6 +200,7 @@ Future<void> openAboutDialog() async {
                     );
                   },
                 ),
+                // Terms of Use
                 ListTile(
                   title: Text(L10n.of(context).aboutTermsOfUse),
                   onTap: () async {
@@ -184,6 +211,7 @@ Future<void> openAboutDialog() async {
                   },
                 ),
                 const Divider(),
+                // Beian (China ICP)
                 if (EnvVar.showBeian) ...[
                   GestureDetector(
                     onTap: () {
@@ -194,6 +222,7 @@ Future<void> openAboutDialog() async {
                   ),
                   const Divider(),
                 ],
+                // Social links
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

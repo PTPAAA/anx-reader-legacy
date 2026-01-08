@@ -7,6 +7,7 @@ import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/page/settings_page/subpage/fonts.dart';
 import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
 
@@ -522,12 +523,14 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
         children: [
           downloadFonts(),
           const Divider(height: 20),
-          writingMode(),
-          translationMode(),
-          columnCount(),
-          convertChinese(),
-          const Divider(height: 15),
-          readingInfo(),
+          if (!Platform.isIOS) ...[
+            writingMode(),
+            translationMode(),
+            columnCount(),
+            convertChinese(),
+            const Divider(height: 15),
+            readingInfo(),
+          ],
           // const Divider(height: 8),
           // bionicReading(),
         ],

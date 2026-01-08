@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:anx_reader/page/book_player/native_epub_player.dart';
 
 /// Native bookmark widget for iOS reader
-class NativeBookmarkWidget extends StatefulWidget {
+/// Uses ValueListenableBuilder for reactive updates without full widget rebuilds
+class NativeBookmarkWidget extends StatelessWidget {
   final GlobalKey<NativeEpubPlayerState> nativePlayerKey;
   final Function(bool) hideAppBarAndBottomBar;
   final VoidCallback closeDrawer;
@@ -15,18 +16,11 @@ class NativeBookmarkWidget extends StatefulWidget {
   });
 
   @override
-  State<NativeBookmarkWidget> createState() => _NativeBookmarkWidgetState();
-}
-
-class _NativeBookmarkWidgetState extends State<NativeBookmarkWidget> {
-  @override
   Widget build(BuildContext context) {
-    final playerState = widget.nativePlayerKey.currentState;
+    final playerState = nativePlayerKey.currentState;
     if (playerState == null) {
       return const Center(child: Text('书签加载中...'));
     }
-
-    final bookmarks = playerState.bookmarks;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,7 +39,7 @@ class _NativeBookmarkWidgetState extends State<NativeBookmarkWidget> {
               FilledButton.tonalIcon(
                 onPressed: () {
                   playerState.addBookmark();
-                  setState(() {}); // Trigger rebuild
+                  // No setState needed - ValueNotifier handles updates
                 },
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('添加'),
@@ -54,68 +48,75 @@ class _NativeBookmarkWidgetState extends State<NativeBookmarkWidget> {
           ),
         ),
         const Divider(height: 1),
-        if (bookmarks.isEmpty)
-          const Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.bookmark_outline, size: 48, color: Colors.grey),
-                  SizedBox(height: 12),
-                  Text('暂无书签', style: TextStyle(color: Colors.grey)),
-                  SizedBox(height: 4),
-                  Text('点击上方"添加"保存当前位置',
-                      style: TextStyle(color: Colors.grey, fontSize: 12)),
-                ],
-              ),
-            ),
-          )
-        else
-          Expanded(
-            child: ListView.builder(
-              itemCount: bookmarks.length,
-              itemBuilder: (context, index) {
-                final bookmark = bookmarks[bookmarks.length - 1 - index];
-                return ListTile(
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.bookmark,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+        // Use ValueListenableBuilder for reactive bookmark list updates
+        Expanded(
+          child: ValueListenableBuilder<List<NativeBookmark>>(
+            valueListenable: playerState.bookmarksNotifier,
+            builder: (context, bookmarks, child) {
+              if (bookmarks.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.bookmark_outline,
+                          size: 48, color: Colors.grey),
+                      SizedBox(height: 12),
+                      Text('暂无书签', style: TextStyle(color: Colors.grey)),
+                      SizedBox(height: 4),
+                      Text('点击上方"添加"保存当前位置',
+                          style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ],
                   ),
-                  title: Text(
-                    bookmark.label,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  subtitle: Text(
-                    playerState.parser?.chapters[bookmark.chapterIndex].title ??
-                        '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    onPressed: () {
-                      playerState.deleteBookmark(bookmark.id);
-                      setState(() {});
-                    },
-                  ),
-                  onTap: () {
-                    playerState.goToBookmark(bookmark);
-                    widget.closeDrawer();
-                    widget.hideAppBarAndBottomBar(false);
-                  },
                 );
-              },
-            ),
+              }
+
+              return ListView.builder(
+                itemCount: bookmarks.length,
+                itemBuilder: (context, index) {
+                  final bookmark = bookmarks[bookmarks.length - 1 - index];
+                  return ListTile(
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.bookmark,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    title: Text(
+                      bookmark.label,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: Text(
+                      playerState
+                              .parser?.chapters[bookmark.chapterIndex].title ??
+                          '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      onPressed: () {
+                        playerState.deleteBookmark(bookmark.id);
+                        // No setState needed - ValueNotifier handles updates
+                      },
+                    ),
+                    onTap: () {
+                      playerState.goToBookmark(bookmark);
+                      closeDrawer();
+                      hideAppBarAndBottomBar(false);
+                    },
+                  );
+                },
+              );
+            },
           ),
+        ),
       ],
     );
   }

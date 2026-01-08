@@ -64,12 +64,13 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   static const empty = SizedBox.shrink();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _canPop = false;
   late Book _book;
   late Widget _currentPage = empty;
   final Stopwatch _readTimeWatch = Stopwatch();
   DateTime? _sessionStart;
   Timer? _awakeTimer;
-  bool bottomBarOffstage = true;
+  final ValueNotifier<bool> _controlsVisible = ValueNotifier<bool>(false);
   late String heroTag;
 
   bool bookmarkExists = false;
@@ -142,7 +143,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
   }
 
   void _requestReaderFocus() {
-    if (bottomBarOffstage && !_readerFocusNode.hasFocus) {
+    if (!_controlsVisible.value && !_readerFocusNode.hasFocus) {
       _readerFocusNode.requestFocus();
     }
   }
@@ -278,22 +279,20 @@ class ReadingPageState extends ConsumerState<ReadingPage>
   }
 
   void showBottomBar() {
-    setState(() {
-      showStatusBarWithoutResize();
-      bottomBarOffstage = false;
-      _releaseReaderFocus();
-    });
+    showStatusBarWithoutResize();
+    _controlsVisible.value = true;
+    _releaseReaderFocus();
   }
 
   void hideBottomBar() {
     setState(() {
       _currentPage = empty;
-      bottomBarOffstage = true;
-      if (Prefs().hideStatusBar) {
-        hideStatusBar();
-      }
-      _requestReaderFocus();
     });
+    _controlsVisible.value = false;
+    if (Prefs().hideStatusBar) {
+      hideStatusBar();
+    }
+    _requestReaderFocus();
   }
 
   void showOrHideAppBarAndBottomBar(bool show) {
@@ -360,232 +359,269 @@ class ReadingPageState extends ConsumerState<ReadingPage>
 
   @override
   Widget build(BuildContext context) {
-    Offstage controller = Offstage(
-      offstage: bottomBarOffstage,
-      child: PointerInterceptor(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                  onTap: () {
-                    showOrHideAppBarAndBottomBar(false);
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  onVerticalDragUpdate: (details) {},
-                  onVerticalDragEnd: (details) {},
-                  child: Container(
-                    color: Colors.black.withAlpha(30),
-                  )),
-            ),
-            Column(
-              children: [
-                AppBar(
-                  title: Text(_book.title, overflow: TextOverflow.ellipsis),
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () {
-                      // close reading page
-                      Navigator.pop(context);
-                    },
+    Widget controller = ValueListenableBuilder<bool>(
+        valueListenable: _controlsVisible,
+        builder: (context, visible, child) {
+          return Offstage(
+            offstage: !visible,
+            child: PointerInterceptor(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                        onTap: () {
+                          showOrHideAppBarAndBottomBar(false);
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        onVerticalDragUpdate: (details) {},
+                        onVerticalDragEnd: (details) {},
+                        child: Container(
+                          color: Colors.black.withAlpha(30),
+                        )),
                   ),
-                  actions: [
-                    // Hide bookmark button on iOS (use dock button instead)
-                    if (!Platform.isIOS)
-                      IconButton(
+                  Column(
+                    children: [
+                      AppBar(
+                        title:
+                            Text(_book.title, overflow: TextOverflow.ellipsis),
+                        leading: IconButton(
+                          icon: const Icon(Icons.arrow_back),
                           onPressed: () {
-                            if (bookmarkExists) {
-                              epubPlayerKey.currentState!.removeAnnotation(
-                                epubPlayerKey.currentState!.bookmarkCfi,
-                              );
-                            } else {
-                              epubPlayerKey.currentState!.addBookmarkHere();
-                            }
+                            // close reading page
+                            Navigator.pop(context);
                           },
-                          icon: bookmarkExists
-                              ? const Icon(Icons.bookmark)
-                              : const Icon(Icons.bookmark_border)),
-                    IconButton(
-                      icon: const Icon(EvaIcons.more_vertical),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          CupertinoPageRoute(
-                            builder: (context) => BookDetail(book: widget.book),
+                        ),
+                        actions: [
+                          // Hide bookmark button on iOS (use dock button instead)
+                          if (!Platform.isIOS)
+                            IconButton(
+                                onPressed: () {
+                                  if (bookmarkExists) {
+                                    epubPlayerKey.currentState!
+                                        .removeAnnotation(
+                                      epubPlayerKey.currentState!.bookmarkCfi,
+                                    );
+                                  } else {
+                                    epubPlayerKey.currentState!
+                                        .addBookmarkHere();
+                                  }
+                                },
+                                icon: bookmarkExists
+                                    ? const Icon(Icons.bookmark)
+                                    : const Icon(Icons.bookmark_border)),
+                          IconButton(
+                            icon: const Icon(EvaIcons.more_vertical),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                CupertinoPageRoute(
+                                  builder: (context) =>
+                                      BookDetail(book: widget.book),
+                                ),
+                              );
+                            },
                           ),
-                        );
+                        ],
+                      ),
+                      const Spacer(),
+                      BottomSheet(
+                        onClosing: () {},
+                        enableDrag: false,
+                        builder: (context) => SafeArea(
+                          top: false,
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 600),
+                            child: StatefulBuilder(
+                              builder:
+                                  (BuildContext context, StateSetter setState) {
+                                final hasContent =
+                                    !identical(_currentPage, empty);
+                                return IntrinsicHeight(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (hasContent)
+                                        Expanded(
+                                          child: _currentPage,
+                                        ),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceAround,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.toc),
+                                            onPressed: tocHandler,
+                                          ),
+                                          // Bookmark button for iOS
+                                          if (Platform.isIOS)
+                                            IconButton(
+                                              icon: const Icon(
+                                                  Icons.bookmark_outline),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _currentPage =
+                                                      NativeBookmarkWidget(
+                                                    nativePlayerKey:
+                                                        nativePlayerKey,
+                                                    hideAppBarAndBottomBar:
+                                                        showOrHideAppBarAndBottomBar,
+                                                    closeDrawer: () {},
+                                                  );
+                                                });
+                                              },
+                                            ),
+                                          // Hide notes on iOS (not supported in native reader)
+                                          if (!Platform.isIOS)
+                                            IconButton(
+                                              icon: const Icon(EvaIcons.edit),
+                                              onPressed: noteHandler,
+                                            ),
+                                          // Hide progress on iOS (shown in native status bar)
+                                          if (!Platform.isIOS)
+                                            IconButton(
+                                              icon:
+                                                  const Icon(Icons.data_usage),
+                                              onPressed: progressHandler,
+                                            ),
+                                          IconButton(
+                                            icon: const Icon(Icons.color_lens),
+                                            onPressed: () {
+                                              if (Platform.isIOS) {
+                                                setState(() {
+                                                  _currentPage =
+                                                      NativeStyleWidget(
+                                                    onStyleChanged: () =>
+                                                        setState(() {}),
+                                                  );
+                                                });
+                                              } else {
+                                                styleHandler(setState);
+                                              }
+                                            },
+                                          ),
+                                          // Hide TTS on iOS (not supported in native reader)
+                                          if (!Platform.isIOS)
+                                            IconButton(
+                                              icon: const Icon(
+                                                  EvaIcons.headphones),
+                                              onPressed: ttsHandler,
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+
+    return PopScope(
+      canPop: _canPop,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        if (Platform.isIOS &&
+            nativePlayerKey.currentState != null &&
+            nativePlayerKey.currentState!.mounted) {
+          await nativePlayerKey.currentState?.saveProgress();
+        }
+
+        if (mounted) {
+          setState(() {
+            _canPop = true;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) Navigator.of(context).pop();
+          });
+        }
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        resizeToAvoidBottomInset: false,
+        drawer: PointerInterceptor(
+          child: Drawer(
+            width: math.min(
+              MediaQuery.of(context).size.width * 0.8,
+              420,
+            ),
+            child: SafeArea(
+              child: Platform.isIOS
+                  ? NativeTocWidget(
+                      nativePlayerKey: nativePlayerKey,
+                      hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
+                      closeDrawer: () {
+                        _scaffoldKey.currentState?.closeDrawer();
+                      },
+                    )
+                  : TocWidget(
+                      epubPlayerKey: epubPlayerKey,
+                      hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
+                      closeDrawer: () {
+                        _scaffoldKey.currentState?.closeDrawer();
                       },
                     ),
-                  ],
-                ),
-                const Spacer(),
-                BottomSheet(
-                  onClosing: () {},
-                  enableDrag: false,
-                  builder: (context) => SafeArea(
-                    top: false,
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 600),
-                      child: StatefulBuilder(
-                        builder: (BuildContext context, StateSetter setState) {
-                          final hasContent = !identical(_currentPage, empty);
-                          return IntrinsicHeight(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (hasContent)
-                                  Expanded(
-                                    child: _currentPage,
-                                  ),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceAround,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.toc),
-                                      onPressed: tocHandler,
-                                    ),
-                                    // Bookmark button for iOS
-                                    if (Platform.isIOS)
-                                      IconButton(
-                                        icon:
-                                            const Icon(Icons.bookmark_outline),
-                                        onPressed: () {
-                                          setState(() {
-                                            _currentPage = NativeBookmarkWidget(
-                                              nativePlayerKey: nativePlayerKey,
-                                              hideAppBarAndBottomBar:
-                                                  showOrHideAppBarAndBottomBar,
-                                              closeDrawer: () {},
-                                            );
-                                          });
-                                        },
-                                      ),
-                                    // Hide notes on iOS (not supported in native reader)
-                                    if (!Platform.isIOS)
-                                      IconButton(
-                                        icon: const Icon(EvaIcons.edit),
-                                        onPressed: noteHandler,
-                                      ),
-                                    // Hide progress on iOS (shown in native status bar)
-                                    if (!Platform.isIOS)
-                                      IconButton(
-                                        icon: const Icon(Icons.data_usage),
-                                        onPressed: progressHandler,
-                                      ),
-                                    IconButton(
-                                      icon: const Icon(Icons.color_lens),
-                                      onPressed: () {
-                                        if (Platform.isIOS) {
-                                          setState(() {
-                                            _currentPage = NativeStyleWidget(
-                                              onStyleChanged: () =>
-                                                  setState(() {}),
-                                            );
-                                          });
-                                        } else {
-                                          styleHandler(setState);
-                                        }
-                                      },
-                                    ),
-                                    // Hide TTS on iOS (not supported in native reader)
-                                    if (!Platform.isIOS)
-                                      IconButton(
-                                        icon: const Icon(EvaIcons.headphones),
-                                        onPressed: ttsHandler,
-                                      ),
-                                  ],
-                                ),
-                              ],
+            ),
+          ),
+        ),
+        body: Stack(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: MouseRegion(
+                    onHover: (PointerHoverEvent detail) {
+                      var y = detail.position.dy;
+                      if (y < 30 ||
+                          y > MediaQuery.of(context).size.height - 30) {
+                        showOrHideAppBarAndBottomBar(true);
+                      }
+                    },
+                    child: Focus(
+                      focusNode: _readerFocusNode,
+                      onKeyEvent: _handleReaderKeyEvent,
+                      child: Stack(
+                        children: [
+                          // Use NativeEpubPlayer on iOS for compatibility
+                          // WebView-based EpubPlayer may have issues on iOS 14
+                          if (Platform.isIOS)
+                            NativeEpubPlayer(
+                              key: nativePlayerKey,
+                              book: _book,
+                              cfi: widget.cfi,
+                              showOrHideAppBarAndBottomBar: (show) =>
+                                  showOrHideAppBarAndBottomBar(show),
+                              onLoadEnd: onLoadEnd,
+                            )
+                          else
+                            EpubPlayer(
+                              key: epubPlayerKey,
+                              book: _book,
+                              cfi: widget.cfi,
+                              showOrHideAppBarAndBottomBar:
+                                  showOrHideAppBarAndBottomBar,
+                              onLoadEnd: onLoadEnd,
+                              initialThemes: widget.initialThemes,
+                              updateParent: updateState,
                             ),
-                          );
-                        },
+                        ],
                       ),
                     ),
                   ),
                 ),
               ],
             ),
+            controller,
           ],
         ),
-      ),
-    );
-
-    return Scaffold(
-      key: _scaffoldKey,
-      resizeToAvoidBottomInset: false,
-      drawer: PointerInterceptor(
-        child: Drawer(
-          width: math.min(
-            MediaQuery.of(context).size.width * 0.8,
-            420,
-          ),
-          child: SafeArea(
-            child: Platform.isIOS
-                ? NativeTocWidget(
-                    nativePlayerKey: nativePlayerKey,
-                    hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
-                    closeDrawer: () {
-                      _scaffoldKey.currentState?.closeDrawer();
-                    },
-                  )
-                : TocWidget(
-                    epubPlayerKey: epubPlayerKey,
-                    hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
-                    closeDrawer: () {
-                      _scaffoldKey.currentState?.closeDrawer();
-                    },
-                  ),
-          ),
-        ),
-      ),
-      body: Stack(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: MouseRegion(
-                  onHover: (PointerHoverEvent detail) {
-                    var y = detail.position.dy;
-                    if (y < 30 || y > MediaQuery.of(context).size.height - 30) {
-                      showOrHideAppBarAndBottomBar(true);
-                    }
-                  },
-                  child: Focus(
-                    focusNode: _readerFocusNode,
-                    onKeyEvent: _handleReaderKeyEvent,
-                    child: Stack(
-                      children: [
-                        // Use NativeEpubPlayer on iOS for compatibility
-                        // WebView-based EpubPlayer may have issues on iOS 14
-                        if (Platform.isIOS)
-                          NativeEpubPlayer(
-                            key: nativePlayerKey,
-                            book: _book,
-                            cfi: widget.cfi,
-                            showOrHideAppBarAndBottomBar: (show) =>
-                                showOrHideAppBarAndBottomBar(show),
-                            onLoadEnd: onLoadEnd,
-                          )
-                        else
-                          EpubPlayer(
-                            key: epubPlayerKey,
-                            book: _book,
-                            cfi: widget.cfi,
-                            showOrHideAppBarAndBottomBar:
-                                showOrHideAppBarAndBottomBar,
-                            onLoadEnd: onLoadEnd,
-                            initialThemes: widget.initialThemes,
-                            updateParent: updateState,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          controller,
-        ],
       ),
     );
   }

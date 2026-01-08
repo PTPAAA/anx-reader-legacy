@@ -431,6 +431,7 @@ Future<void> pushToReadingPage(
   ).then((_) {
     AnxLog.info('ReadingPage: poped: ${book.title}');
     currentReading.finish();
+    ref.read(bookListProvider.notifier).refresh();
     chapterContentBridge.state = null;
     tocSearch.clear();
     AnxLog.info('Pop successfully ReadingPage: ${book.title}');

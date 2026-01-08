@@ -6,6 +6,7 @@ import 'package:anx_reader/models/book_style.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/widgets/icon_and_text.dart';
 import 'package:anx_reader/widgets/reading_page/more_settings/custom_css_editor.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
 
@@ -251,11 +252,13 @@ class _StyleSettingsState extends State<StyleSettings> {
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setState) => Column(
           children: [
-            textIndent(bookStyle, setState),
+            if (!Platform.isIOS) textIndent(bookStyle, setState),
             sideMarginSlider(bookStyle, setState),
-            topBottomMarginSlider(bookStyle, setState),
-            letterSpacingSlider(bookStyle, setState),
-            fontWeightSlider(bookStyle, setState),
+            if (!Platform.isIOS) ...[
+              topBottomMarginSlider(bookStyle, setState),
+              letterSpacingSlider(bookStyle, setState),
+              fontWeightSlider(bookStyle, setState),
+            ]
           ],
         ),
       );
@@ -267,9 +270,12 @@ class _StyleSettingsState extends State<StyleSettings> {
         children: [
           sliders(),
           const SizedBox(height: 16),
+          const SizedBox(height: 16),
           const Divider(),
-          textAlignment(),
-          CustomCSSEditor(),
+          if (!Platform.isIOS) ...[
+            textAlignment(),
+            CustomCSSEditor(),
+          ]
         ],
       ),
     );
