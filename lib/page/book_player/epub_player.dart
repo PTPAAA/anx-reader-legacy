@@ -1017,7 +1017,12 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
           ),
         ),
       ),
-      initialSettings: initialSettings,
+      ),
+      initialSettings: InAppWebViewSettings( // Enhanced settings for iOS 14 legacy support
+        allowUniversalAccessFromFileURLs: true,
+        allowFileAccessFromFileURLs: true,
+        mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+      ),
       contextMenu: contextMenu,
       onLoadStop: (controller, uri) => onWebViewCreated(controller),
       onConsoleMessage: webviewConsoleMessage,
@@ -1030,6 +1035,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     return SizedBox.expand(
       child: Stack(
         children: [
+          Container(color: Colors.red), // DEBUG: If you see red, the code is updated.
           webView,
           Positioned.fill(
             child: PointerInterceptor(

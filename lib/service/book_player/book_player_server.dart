@@ -34,7 +34,8 @@ class Server {
     int port = Prefs().lastServerPort;
 
     try {
-      _server = await io.serve(handler, '127.0.0.1', port);
+      String host = Platform.isIOS ? '0.0.0.0' : '127.0.0.1'; // iOS 14 fix
+      _server = await io.serve(handler, host, port);
     } catch (e, s) {
       AnxLog.warning(
           'Server: Failed to bind to port $port, trying random port $e', s);
