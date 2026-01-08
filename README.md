@@ -1,5 +1,7 @@
 对anx reader的修改，只是为了适配我的iphone 8p备用摸鱼手机看小说
 源项目https://github.com/Anxcye/anx-reader
+去掉了ai/笔记/朗读/翻译等功能，只是按照我个人的摸鱼需要对原项目代码进行了调整，感谢https://github.com/Anxcye提供的这样好的项目，功能都很好用
+兼容我的ios14.4的苹果8p，装个巨魔就可以直接用
 
 ## License
 This project is licensed under the [MIT License](./LICENSE).
