@@ -88,6 +88,9 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
   OverlayEntry? contextMenuEntry;
   AnimationController? _animationController;
   Animation<double>? _animation;
+  String? _localIndexHtmlPath;
+  bool _isReady = false;
+
   bool showHistory = false;
   bool canGoBack = false;
   bool canGoForward = false;
@@ -826,6 +829,20 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   @override
   void initState() {
+    // Initialize Player Environment for iOS Native Mode
+    if (Platform.isIOS) {
+      prepareLocalPlayer().then((path) {
+        if (mounted) {
+          setState(() {
+            _localIndexHtmlPath = 'file://$path';
+            _isReady = true;
+          });
+        }
+      });
+    } else {
+      _isReady = true;
+    }
+
     book = widget.book;
     getThemeColor();
 
