@@ -23,6 +23,7 @@ import 'package:anx_reader/widgets/reading_page/progress_widget.dart';
 import 'package:anx_reader/widgets/reading_page/tts_widget.dart';
 import 'package:anx_reader/widgets/reading_page/style_widget.dart';
 import 'package:anx_reader/widgets/reading_page/toc_widget.dart';
+import 'package:anx_reader/widgets/reading_page/native_toc_widget.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -55,6 +56,7 @@ class ReadingPage extends ConsumerStatefulWidget {
 final GlobalKey<ReadingPageState> readingPageKey =
     GlobalKey<ReadingPageState>();
 final epubPlayerKey = GlobalKey<EpubPlayerState>();
+final nativePlayerKey = GlobalKey<NativeEpubPlayerState>();
 
 class ReadingPageState extends ConsumerState<ReadingPage>
     with WidgetsBindingObserver, TickerProviderStateMixin {
@@ -438,24 +440,30 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                                       icon: const Icon(Icons.toc),
                                       onPressed: tocHandler,
                                     ),
-                                    IconButton(
-                                      icon: const Icon(EvaIcons.edit),
-                                      onPressed: noteHandler,
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.data_usage),
-                                      onPressed: progressHandler,
-                                    ),
+                                    // Hide notes on iOS (not supported in native reader)
+                                    if (!Platform.isIOS)
+                                      IconButton(
+                                        icon: const Icon(EvaIcons.edit),
+                                        onPressed: noteHandler,
+                                      ),
+                                    // Hide progress on iOS (shown in native status bar)
+                                    if (!Platform.isIOS)
+                                      IconButton(
+                                        icon: const Icon(Icons.data_usage),
+                                        onPressed: progressHandler,
+                                      ),
                                     IconButton(
                                       icon: const Icon(Icons.color_lens),
                                       onPressed: () {
                                         styleHandler(setState);
                                       },
                                     ),
-                                    IconButton(
-                                      icon: const Icon(EvaIcons.headphones),
-                                      onPressed: ttsHandler,
-                                    ),
+                                    // Hide TTS on iOS (not supported in native reader)
+                                    if (!Platform.isIOS)
+                                      IconButton(
+                                        icon: const Icon(EvaIcons.headphones),
+                                        onPressed: ttsHandler,
+                                      ),
                                   ],
                                 ),
                               ],
@@ -483,13 +491,21 @@ class ReadingPageState extends ConsumerState<ReadingPage>
             420,
           ),
           child: SafeArea(
-            child: TocWidget(
-              epubPlayerKey: epubPlayerKey,
-              hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
-              closeDrawer: () {
-                _scaffoldKey.currentState?.closeDrawer();
-              },
-            ),
+            child: Platform.isIOS
+                ? NativeTocWidget(
+                    nativePlayerKey: nativePlayerKey,
+                    hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
+                    closeDrawer: () {
+                      _scaffoldKey.currentState?.closeDrawer();
+                    },
+                  )
+                : TocWidget(
+                    epubPlayerKey: epubPlayerKey,
+                    hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
+                    closeDrawer: () {
+                      _scaffoldKey.currentState?.closeDrawer();
+                    },
+                  ),
           ),
         ),
       ),
@@ -514,6 +530,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                         // WebView-based EpubPlayer may have issues on iOS 14
                         if (Platform.isIOS)
                           NativeEpubPlayer(
+                            key: nativePlayerKey,
                             book: _book,
                             cfi: widget.cfi,
                             showOrHideAppBarAndBottomBar: (show) =>

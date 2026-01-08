@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:battery_plus/battery_plus.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/service/native_epub_parser.dart';
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/providers/book_list.dart';
 import 'package:anx_reader/utils/log/common.dart';
+import 'package:intl/intl.dart';
 
 /// Native EPUB reader widget for iOS 14 compatibility
 /// Uses flutter_html instead of WebView/foliate-js
@@ -35,21 +38,68 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
   String? _error;
   int _currentChapterIndex = 0;
   final ScrollController _scrollController = ScrollController();
-  final PageController _pageController = PageController();
   bool _showControls = false;
 
-  // Expose methods for external control (matching EpubPlayer interface)
+  // Status bar info
+  int _batteryLevel = 100;
+  String _currentTime = '';
+  Timer? _statusTimer;
+  double _chapterScrollProgress = 0.0;
+
+  // Expose for reading_page integration
+  NativeEpubParser? get parser => _parser;
   String get chapterTitle => _parser?.chapters.isNotEmpty == true
       ? _parser!.chapters[_currentChapterIndex].title
       : '';
   double get percentage => _parser?.chapters.isEmpty != false
       ? 0.0
       : (_currentChapterIndex + 1) / _parser!.chapters.length;
+  int get currentChapterIndex => _currentChapterIndex;
+  List<TocItem> get toc => _parser?.toc ?? [];
 
   @override
   void initState() {
     super.initState();
     _loadBook();
+    _startStatusUpdates();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _startStatusUpdates() {
+    _updateStatus();
+    _statusTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _updateStatus();
+    });
+  }
+
+  Future<void> _updateStatus() async {
+    try {
+      final battery = Battery();
+      final level = await battery.batteryLevel;
+      if (mounted) {
+        setState(() {
+          _batteryLevel = level;
+          _currentTime = DateFormat('HH:mm').format(DateTime.now());
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _currentTime = DateFormat('HH:mm').format(DateTime.now());
+        });
+      }
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      if (maxScroll > 0) {
+        setState(() {
+          _chapterScrollProgress = _scrollController.offset / maxScroll;
+        });
+      }
+    }
   }
 
   Future<void> _loadBook() async {
@@ -58,7 +108,6 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
       _parser = NativeEpubParser(file);
       await _parser!.parse();
 
-      // Restore reading position from CFI if available
       final cfi = widget.cfi ?? widget.book.lastReadPosition;
       if (cfi.isNotEmpty) {
         _currentChapterIndex = _parseChapterFromCfi(cfi);
@@ -114,32 +163,27 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     }
   }
 
-  void _goToChapter(int index) {
+  void goToChapter(int index) {
     if (_parser == null) return;
     if (index < 0 || index >= _parser!.chapters.length) return;
 
     setState(() {
       _currentChapterIndex = index;
+      _chapterScrollProgress = 0;
     });
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-    // Reset scroll position for new chapter
     _scrollController.jumpTo(0);
   }
 
   void _nextChapter() {
     if (_parser == null) return;
     if (_currentChapterIndex < _parser!.chapters.length - 1) {
-      _goToChapter(_currentChapterIndex + 1);
+      goToChapter(_currentChapterIndex + 1);
     }
   }
 
   void _prevChapter() {
     if (_currentChapterIndex > 0) {
-      _goToChapter(_currentChapterIndex - 1);
+      goToChapter(_currentChapterIndex - 1);
     }
   }
 
@@ -150,11 +194,42 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     widget.showOrHideAppBarAndBottomBar(_showControls);
   }
 
+  void _scrollPage(bool forward) {
+    if (!_scrollController.hasClients) return;
+
+    final pageHeight = MediaQuery.of(context).size.height * 0.85;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentOffset = _scrollController.offset;
+
+    if (forward) {
+      if (currentOffset >= maxScroll - 10) {
+        _nextChapter();
+      } else {
+        _scrollController.animateTo(
+          (currentOffset + pageHeight).clamp(0, maxScroll),
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    } else {
+      if (currentOffset <= 10) {
+        _prevChapter();
+      } else {
+        _scrollController.animateTo(
+          (currentOffset - pageHeight).clamp(0, maxScroll),
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _saveProgress();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _pageController.dispose();
+    _statusTimer?.cancel();
     super.dispose();
   }
 
@@ -163,16 +238,7 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     if (_isLoading) {
       return Container(
         color: Theme.of(context).scaffoldBackgroundColor,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text('加载中...', style: Theme.of(context).textTheme.bodyLarge),
-            ],
-          ),
-        ),
+        child: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -189,9 +255,7 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
               const SizedBox(height: 16),
               Text('加载失败', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
-              Text(_error!,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium),
+              Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () => Navigator.pop(context),
@@ -209,9 +273,7 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
 
   Widget _buildReaderView() {
     if (_parser == null || _parser!.chapters.isEmpty) {
-      return Center(
-        child: Text('暂无内容', style: Theme.of(context).textTheme.bodyLarge),
-      );
+      return const Center(child: Text('暂无内容'));
     }
 
     final prefs = Prefs();
@@ -219,7 +281,6 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     final style = prefs.bookStyle;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Use theme colors, with dark mode fallback
     final bgColor = isDarkMode
         ? const Color(0xFF1A1A1A)
         : Color(int.parse('0xFF${theme.backgroundColor}'));
@@ -229,72 +290,138 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
 
     return Container(
       color: bgColor,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapUp: (details) {
-          // Tap zones: left 1/4 = prev, right 1/4 = next, center = toggle controls
-          final screenWidth = MediaQuery.of(context).size.width;
-          final tapX = details.localPosition.dx;
+      child: Column(
+        children: [
+          // Main content area with tap zones
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) {
+                final size = MediaQuery.of(context).size;
+                final tapX = details.localPosition.dx;
+                final tapY = details.localPosition.dy;
 
-          if (tapX < screenWidth * 0.25) {
-            // Left zone - previous page/chapter
-            if (_scrollController.hasClients &&
-                _scrollController.offset > 100) {
-              _scrollController.animateTo(
-                _scrollController.offset -
-                    MediaQuery.of(context).size.height * 0.8,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            } else {
-              _prevChapter();
-            }
-          } else if (tapX > screenWidth * 0.75) {
-            // Right zone - next page/chapter
-            if (_scrollController.hasClients) {
-              final maxScroll = _scrollController.position.maxScrollExtent;
-              if (_scrollController.offset < maxScroll - 100) {
-                _scrollController.animateTo(
-                  _scrollController.offset +
-                      MediaQuery.of(context).size.height * 0.8,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOut,
-                );
-              } else {
-                _nextChapter();
-              }
-            }
-          } else {
-            // Center zone - toggle controls
-            _toggleControls();
-          }
-        },
-        child: _buildChapterView(
-            _parser!.chapters[_currentChapterIndex], bgColor, textColor, style),
+                // Bottom corners for page turning
+                if (tapY > size.height * 0.7) {
+                  if (tapX < size.width * 0.3) {
+                    _scrollPage(false); // prev
+                  } else if (tapX > size.width * 0.7) {
+                    _scrollPage(true); // next
+                  } else {
+                    _toggleControls();
+                  }
+                }
+                // Middle area for controls
+                else if (tapY > size.height * 0.3) {
+                  if (tapX > size.width * 0.25 && tapX < size.width * 0.75) {
+                    _toggleControls();
+                  } else if (tapX < size.width * 0.25) {
+                    _scrollPage(false);
+                  } else {
+                    _scrollPage(true);
+                  }
+                }
+                // Top area
+                else {
+                  if (tapX < size.width * 0.3) {
+                    _scrollPage(false);
+                  } else if (tapX > size.width * 0.7) {
+                    _scrollPage(true);
+                  } else {
+                    _toggleControls();
+                  }
+                }
+              },
+              child: _buildChapterView(
+                _parser!.chapters[_currentChapterIndex],
+                bgColor,
+                textColor,
+                style,
+              ),
+            ),
+          ),
+          // Status bar
+          _buildStatusBar(bgColor, textColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBar(Color bgColor, Color textColor) {
+    final mutedColor = textColor.withOpacity(0.5);
+    final chapterProgress = _parser!.chapters.isEmpty
+        ? 0.0
+        : (_currentChapterIndex + _chapterScrollProgress) /
+            _parser!.chapters.length;
+
+    return Container(
+      color: bgColor,
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 8,
+        top: 8,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Battery
+          Row(
+            children: [
+              Icon(
+                _batteryLevel > 80
+                    ? Icons.battery_full
+                    : _batteryLevel > 50
+                        ? Icons.battery_5_bar
+                        : _batteryLevel > 20
+                            ? Icons.battery_3_bar
+                            : Icons.battery_1_bar,
+                size: 16,
+                color: mutedColor,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '$_batteryLevel%',
+                style: TextStyle(fontSize: 12, color: mutedColor),
+              ),
+            ],
+          ),
+          // Chapter progress
+          Text(
+            '${_currentChapterIndex + 1}/${_parser!.chapters.length} · ${(chapterProgress * 100).toStringAsFixed(1)}%',
+            style: TextStyle(fontSize: 12, color: mutedColor),
+          ),
+          // Time
+          Text(
+            _currentTime,
+            style: TextStyle(fontSize: 12, color: mutedColor),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildChapterView(
       EpubChapter chapter, Color bgColor, Color textColor, dynamic style) {
-    // More readable font sizes
     final baseFontSize = (style.fontSize as num).toDouble();
     final actualFontSize = baseFontSize < 16 ? 18.0 : baseFontSize;
     final lineHeight = (style.lineHeight as num).toDouble();
     final actualLineHeight = lineHeight < 1.5 ? 1.6 : lineHeight;
+    final sideMargin = (style.sideMargin as num).toDouble();
 
     return SingleChildScrollView(
       controller: _scrollController,
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       padding: EdgeInsets.symmetric(
-        horizontal: 20,
+        horizontal: sideMargin > 0 ? sideMargin : 20,
         vertical: 16,
       ),
       child: SafeArea(
+        bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Chapter title with better styling
+            // Chapter title
             Container(
               padding: const EdgeInsets.only(bottom: 24, top: 8),
               child: Text(
@@ -325,31 +452,18 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
                   lineHeight: LineHeight(actualLineHeight),
                   margin: Margins(bottom: Margin(actualFontSize * 0.8)),
                 ),
-                "h1": Style(
-                  fontSize: FontSize(actualFontSize * 1.5),
+                "h1, h2, h3": Style(
                   fontWeight: FontWeight.bold,
                   color: textColor,
-                  margin: Margins(top: Margin(16), bottom: Margin(16)),
-                ),
-                "h2": Style(
-                  fontSize: FontSize(actualFontSize * 1.3),
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                  margin: Margins(top: Margin(14), bottom: Margin(14)),
-                ),
-                "h3": Style(
-                  fontSize: FontSize(actualFontSize * 1.1),
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                  margin: Margins(top: Margin(12), bottom: Margin(12)),
+                  margin: Margins(top: Margin(16), bottom: Margin(12)),
                 ),
                 "img": Style(
-                  width: Width(MediaQuery.of(context).size.width - 40),
+                  width: Width(
+                      MediaQuery.of(context).size.width - sideMargin * 2 - 40),
                   margin: Margins(top: Margin(16), bottom: Margin(16)),
                 ),
                 "a": Style(
                   color: Theme.of(context).colorScheme.primary,
-                  textDecoration: TextDecoration.underline,
                 ),
               },
               onLinkTap: (url, _, __) {
@@ -358,81 +472,21 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
                       url.contains(c.href) ||
                       c.href.contains(url.split('#').first));
                   if (chapterIndex >= 0) {
-                    _goToChapter(chapterIndex);
+                    goToChapter(chapterIndex);
                   }
                 }
               },
             ),
-            // Bottom navigation
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              child: Column(
-                children: [
-                  // Progress indicator
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: textColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '${_currentChapterIndex + 1} / ${_parser!.chapters.length}',
-                            style: TextStyle(
-                              color: textColor.withOpacity(0.7),
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Navigation buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      if (_currentChapterIndex > 0)
-                        TextButton.icon(
-                          onPressed: _prevChapter,
-                          icon: Icon(Icons.arrow_back_ios,
-                              color: textColor.withOpacity(0.7), size: 18),
-                          label: Text('上一章',
-                              style:
-                                  TextStyle(color: textColor.withOpacity(0.7))),
-                        )
-                      else
-                        const SizedBox(width: 100),
-                      if (_currentChapterIndex < _parser!.chapters.length - 1)
-                        TextButton.icon(
-                          onPressed: _nextChapter,
-                          icon: Icon(Icons.arrow_forward_ios,
-                              color: textColor.withOpacity(0.7), size: 18),
-                          label: Text('下一章',
-                              style:
-                                  TextStyle(color: textColor.withOpacity(0.7))),
-                        )
-                      else
-                        const SizedBox(width: 100),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            // Bottom padding for comfortable reading
+            const SizedBox(height: 100),
           ],
         ),
       ),
     );
   }
 
-  /// Clean up HTML for better rendering
   String _preprocessHtml(String html) {
-    // Remove XML declarations and doctype
-    var cleaned = html
+    return html
         .replaceAll(RegExp(r'<\?xml[^>]*\?>'), '')
         .replaceAll(RegExp(r'<!DOCTYPE[^>]*>'), '')
         .replaceAll(RegExp(r'<html[^>]*>'), '<div>')
@@ -440,6 +494,5 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
         .replaceAll(RegExp(r'<head>.*?</head>', dotAll: true), '')
         .replaceAll(RegExp(r'<body[^>]*>'), '')
         .replaceAll(RegExp(r'</body>'), '');
-    return cleaned;
   }
 }
