@@ -157,11 +157,20 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
       final cfi = widget.cfi ?? widget.book.lastReadPosition;
       if (cfi.isNotEmpty) {
         _currentChapterIndex = _parseChapterFromCfi(cfi);
+        // Extract and restore scroll position
+        _pendingScrollOffset = _parseScrollFromCfi(cfi);
       }
 
       setState(() => _isLoading = false);
       widget.onLoadEnd();
       _updateProgress();
+
+      // Restore scroll position after chapter loads
+      if (_pendingScrollOffset != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _restoreScrollPosition();
+        });
+      }
     } catch (e) {
       AnxLog.severe('NativeEpubPlayer: Failed to load book: $e');
       setState(() {
@@ -201,6 +210,7 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
 
   int _parseChapterFromCfi(String cfi) {
     try {
+      // Handle both standard CFI and our custom format with scroll
       final match = RegExp(r'/6/(\d+)').firstMatch(cfi);
       if (match != null) {
         return (int.parse(match.group(1)!) ~/ 2) - 1;
@@ -209,7 +219,37 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
     return 0;
   }
 
-  String _generateCfi() => 'epubcfi(/6/${(_currentChapterIndex + 1) * 2})';
+  double? _parseScrollFromCfi(String cfi) {
+    try {
+      // Parse scroll offset from CFI: epubcfi(/6/X#scroll=Y)
+      final match = RegExp(r'#scroll=([\d.]+)').firstMatch(cfi);
+      if (match != null) {
+        return double.parse(match.group(1)!);
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  double? _pendingScrollOffset;
+
+  void _restoreScrollPosition() {
+    if (_pendingScrollOffset != null && _scrollController.hasClients) {
+      // Wait for content to be laid out
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_scrollController.hasClients && _pendingScrollOffset != null) {
+          _scrollController.jumpTo(_pendingScrollOffset!);
+          _pendingScrollOffset = null;
+        }
+      });
+    }
+  }
+
+  String _generateCfi() {
+    // Include scroll offset for precise position restoration
+    final scrollOffset =
+        _scrollController.hasClients ? _scrollController.offset : 0.0;
+    return 'epubcfi(/6/${(_currentChapterIndex + 1) * 2}#scroll=${scrollOffset.toStringAsFixed(1)})';
+  }
 
   Future<void> _updateProgress() async {
     if (_parser == null) return;

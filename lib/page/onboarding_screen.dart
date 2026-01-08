@@ -43,7 +43,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _buildWelcomePage(),
         _buildAppearancePage(),
         _buildSyncPage(),
-        _buildAIPage(),
         _buildCompletePage(),
       ],
       onDone: _onIntroEnd,
@@ -122,18 +121,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         L10n.of(context).onboardingSyncTip,
       ),
       image: _buildIconPage(Icons.sync_outlined),
-      decoration: _getPageDecoration(),
-    );
-  }
-
-  PageViewModel _buildAIPage() {
-    return PageViewModel(
-      title: L10n.of(context).onboardingAiTitle,
-      bodyWidget: _buildPageWithTip(
-        L10n.of(context).onboardingAiBody,
-        L10n.of(context).onboardingAiTip,
-      ),
-      image: _buildIconPage(Icons.auto_awesome_outlined),
       decoration: _getPageDecoration(),
     );
   }
