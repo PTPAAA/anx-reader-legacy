@@ -174,7 +174,7 @@ class AndroidSettingsTile extends StatelessWidget {
                       DefaultTextStyle(
                         style: TextStyle(
                           color: enabled
-                              ? Theme.of(context).textTheme.bodyLarge!.color!
+                              ? Theme.of(context).colorScheme.onSurface
                               : Theme.of(context).disabledColor,
                           fontSize: 18,
                           fontWeight: FontWeight.w400,
@@ -188,9 +188,8 @@ class AndroidSettingsTile extends StatelessWidget {
                             style: TextStyle(
                               color: enabled
                                   ? Theme.of(context)
-                                      .textTheme
-                                      .bodySmall!
-                                      .color!
+                                      .colorScheme
+                                      .onSurfaceVariant
                                   : Theme.of(context).disabledColor,
                             ),
                             child: value!,
@@ -203,9 +202,8 @@ class AndroidSettingsTile extends StatelessWidget {
                             style: TextStyle(
                               color: enabled
                                   ? Theme.of(context)
-                                      .textTheme
-                                      .bodySmall!
-                                      .color!
+                                      .colorScheme
+                                      .onSurfaceVariant
                                   : Theme.of(context).disabledColor,
                             ),
                             child: description!,

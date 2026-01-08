@@ -513,6 +513,10 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
         .replaceAll(RegExp(r'</html>'), '')
         .replaceAll(RegExp(r'<head>.*?</head>', dotAll: true), '')
         .replaceAll(RegExp(r'<body[^>]*>'), '')
-        .replaceAll(RegExp(r'</body>'), '');
+        .replaceAll(RegExp(r'</body>'), '')
+        // Remove hardcoded colors to allow theming
+        .replaceAll(RegExp(r'color\s*:[^;"]+;?', caseSensitive: false), '')
+        .replaceAll(
+            RegExp(r'background-color\s*:[^;"]+;?', caseSensitive: false), '');
   }
 }
