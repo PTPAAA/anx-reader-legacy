@@ -163,7 +163,7 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
 
       setState(() => _isLoading = false);
       widget.onLoadEnd();
-      _updateProgress();
+      // Note: Don't call _updateProgress() here - it would overwrite saved position with scroll=0
 
       // Restore scroll position after chapter loads
       if (_pendingScrollOffset != null) {
