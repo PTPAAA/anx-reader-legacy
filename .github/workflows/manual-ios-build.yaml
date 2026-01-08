@@ -46,11 +46,13 @@ jobs:
           # Create Payload structure for IPA
           cd build/ios/Release-iphoneos
           mkdir -p Payload
-          cp -r Runner.app Payload/
+          cp -a Runner.app Payload/
           
-          # Zip it up as unsinged IPA
-          zip -r Anx-Reader-ios-manual-unsigned.zip Payload
-          cp Anx-Reader-ios-manual-unsigned.zip Anx-Reader-ios-manual-unsigned.ipa
+          # Zip it up as unsinged IPA with symlinks preserved (-y)
+          zip -q -y -r Anx-Reader-ios-manual-unsigned.ipa Payload
+          
+          # Verify structure in logs
+          unzip -l Anx-Reader-ios-manual-unsigned.ipa | head -n 20
           
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
