@@ -1,4 +1,5 @@
-对https://github.com/Anxcye/anx-reader的修改，只是为了适配我的iphone 8p备用摸鱼手机看小说
+对anx reader的修改，只是为了适配我的iphone 8p备用摸鱼手机看小说
+源项目https://github.com/Anxcye/anx-reader
 
 <br>
 
