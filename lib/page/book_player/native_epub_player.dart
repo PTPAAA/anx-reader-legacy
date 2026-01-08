@@ -152,7 +152,7 @@ class NativeEpubPlayerState extends ConsumerState<NativeEpubPlayer> {
       final file = File(widget.book.fileFullPath);
       _parser = NativeEpubParser(file);
       await _parser!.parse();
-      await _loadBookmarks();
+      await _parser!.parse();
 
       final cfi = widget.cfi ?? widget.book.lastReadPosition;
       if (cfi.isNotEmpty) {
