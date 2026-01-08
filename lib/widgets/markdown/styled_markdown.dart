@@ -22,6 +22,7 @@ class StyledMarkdown extends StatelessWidget {
     final htmlContent = _markdownToHtml(data);
 
     return SelectableRegion(
+      focusNode: FocusNode(),
       selectionControls: selectionControls(),
       child: Html(
         data: htmlContent,
