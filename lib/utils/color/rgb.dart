@@ -7,7 +7,7 @@ int sanitizeRgb(int value) => value & 0x00FFFFFF;
 Color colorFromRgb(int rgb) => Color(0xFF000000 | sanitizeRgb(rgb));
 
 /// Extract RGB component from a Color.
-int rgbFromColor(Color color) => color.toARGB32() & 0x00FFFFFF;
+int rgbFromColor(Color color) => color.value & 0x00FFFFFF;
 
 int? parseRgb(dynamic value) {
   if (value == null) return null;
