@@ -472,76 +472,61 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     );
 
     return Scaffold(
+      key: _scaffoldKey,
       resizeToAvoidBottomInset: false,
-      body: Hero(
-        tag: widget.heroTag ??
-            (Prefs().openBookAnimation ? _book.coverFullPath : heroTag),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height,
-            width: MediaQuery.of(context).size.width,
-            child: Scaffold(
-              key: _scaffoldKey,
-              resizeToAvoidBottomInset: false,
-              drawer: PointerInterceptor(
-                child: Drawer(
-                  width: math.min(
-                    MediaQuery.of(context).size.width * 0.8,
-                    420,
-                  ),
-                  child: SafeArea(
-                    child: TocWidget(
-                      epubPlayerKey: epubPlayerKey,
-                      hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
-                      closeDrawer: () {
-                        _scaffoldKey.currentState?.closeDrawer();
-                      },
+      drawer: PointerInterceptor(
+        child: Drawer(
+          width: math.min(
+            MediaQuery.of(context).size.width * 0.8,
+            420,
+          ),
+          child: SafeArea(
+            child: TocWidget(
+              epubPlayerKey: epubPlayerKey,
+              hideAppBarAndBottomBar: showOrHideAppBarAndBottomBar,
+              closeDrawer: () {
+                _scaffoldKey.currentState?.closeDrawer();
+              },
+            ),
+          ),
+        ),
+      ),
+      body: Stack(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: MouseRegion(
+                  onHover: (PointerHoverEvent detail) {
+                    var y = detail.position.dy;
+                    if (y < 30 || y > MediaQuery.of(context).size.height - 30) {
+                      showOrHideAppBarAndBottomBar(true);
+                    }
+                  },
+                  child: Focus(
+                    focusNode: _readerFocusNode,
+                    onKeyEvent: _handleReaderKeyEvent,
+                    child: Stack(
+                      children: [
+                        EpubPlayer(
+                          key: epubPlayerKey,
+                          book: _book,
+                          cfi: widget.cfi,
+                          showOrHideAppBarAndBottomBar:
+                              showOrHideAppBarAndBottomBar,
+                          onLoadEnd: onLoadEnd,
+                          initialThemes: widget.initialThemes,
+                          updateParent: updateState,
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-              body: Stack(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: MouseRegion(
-                          onHover: (PointerHoverEvent detail) {
-                            var y = detail.position.dy;
-                            if (y < 30 ||
-                                y > MediaQuery.of(context).size.height - 30) {
-                              showOrHideAppBarAndBottomBar(true);
-                            }
-                          },
-                          child: Focus(
-                            focusNode: _readerFocusNode,
-                            onKeyEvent: _handleReaderKeyEvent,
-                            child: Stack(
-                              children: [
-                                EpubPlayer(
-                                  key: epubPlayerKey,
-                                  book: _book,
-                                  cfi: widget.cfi,
-                                  showOrHideAppBarAndBottomBar:
-                                      showOrHideAppBarAndBottomBar,
-                                  onLoadEnd: onLoadEnd,
-                                  initialThemes: widget.initialThemes,
-                                  updateParent: updateState,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  controller,
-                ],
-              ),
-            ),
+            ],
           ),
-        ),
+          controller,
+        ],
       ),
     );
   }
