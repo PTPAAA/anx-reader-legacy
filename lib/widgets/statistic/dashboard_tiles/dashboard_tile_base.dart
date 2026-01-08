@@ -248,10 +248,6 @@ class DashboardTileShell extends ConsumerWidget {
         axis: Axis.vertical,
         halfFlips: 1,
       ),
-      motion: Motion.bouncySpring(
-        snapToEnd: true,
-        duration: const Duration(milliseconds: 500),
-      ),
       child: GestureDetector(
         onTap: () {
           if (!tile.canFlip) {
