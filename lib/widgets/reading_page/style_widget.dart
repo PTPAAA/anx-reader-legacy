@@ -242,7 +242,6 @@ class StyleWidgetState extends State<StyleWidget> {
         ),
         Expanded(
           child: Slider(
-              padding: EdgeInsets.symmetric(horizontal: 8),
               value: bookStyle.lineHeight,
               onChanged: (double value) {
                 setState(() {
@@ -262,7 +261,6 @@ class StyleWidgetState extends State<StyleWidget> {
         ),
         Expanded(
           child: Slider(
-            padding: EdgeInsets.symmetric(horizontal: 8),
             value: bookStyle.paragraphSpacing,
             onChanged: (double value) {
               setState(() {
