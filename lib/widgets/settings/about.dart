@@ -41,7 +41,7 @@ class _AboutState extends State<About> {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      title: Text(L10n.of(context).appAbout),
+      title: const Text('关于 Anx Reader Legacy'),
       leading: Icon(Icons.info_outline,
           color: widget.leadingColor
               ? Theme.of(context).colorScheme.primary

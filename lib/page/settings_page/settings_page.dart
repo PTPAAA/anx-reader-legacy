@@ -67,7 +67,12 @@ class _SettingsPageBodyState extends State<SettingsPageBody> {
           return widget.isMobile
               ? <Widget>[
                   CupertinoSliverNavigationBar(
-                    largeTitle: Text(widget.title),
+                    largeTitle: Text(
+                      widget.title,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
                     backgroundColor:
                         Theme.of(context).appBarTheme.backgroundColor,
                   )

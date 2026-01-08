@@ -513,12 +513,17 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                                   (BuildContext context, StateSetter setState) {
                                 final hasContent =
                                     !identical(_currentPage, empty);
-                                return IntrinsicHeight(
+                                return SizedBox(
+                                  height: hasContent
+                                      ? 400
+                                      : null, // Fixed height for content pages
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       if (hasContent)
-                                        Expanded(
+                                        SizedBox(
+                                          height:
+                                              340, // Allow bookmark list to have enough space
                                           child: _currentPage,
                                         ),
                                       Row(
