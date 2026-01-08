@@ -1,67 +1,130 @@
 import 'dart:io';
-import 'package:epub_pro/epub_pro.dart';
-import 'package:anx_reader/models/book.dart';
-import 'package:anx_reader/utils/log/common.dart';
 import 'dart:convert';
+import 'package:archive/archive.dart';
+import 'package:xml/xml.dart';
+import 'package:anx_reader/utils/log/common.dart';
 
+/// Manual EPUB parser using archive + xml packages
+/// This avoids dependency conflicts with epub packages that require specific image versions
 class BookParser {
-  /// Parse EPUB file metadata using pure Dart (detached from WebView)
+  /// Parse EPUB file metadata manually
   static Future<Map<String, dynamic>> parseEpubMetadata(File file) async {
     try {
       final bytes = await file.readAsBytes();
-      final epubBook = await EpubReader.readBook(bytes);
+      final archive = ZipDecoder().decodeBytes(bytes);
 
-      final title = epubBook.Title ?? 'Unknown';
-      final author = epubBook.Author ?? 'Unknown';
-
-      String coverBase64 = '';
-      if (epubBook.CoverImage != null) {
-        // Convert Image object to base64 if needed, OR save directly.
-        // Epubx CoverImage is an Image library object? checking docs...
-        // Actually EpubReader.readBook returns an EpubBook.
-        // It typically has a CoverImage property which might be raw bytes or an Image object.
-        // Checking commonly used epubx/epub package structure.
-        // Usually it's `List<int>` or similar for raw data if using `epub_view` or similar.
-        // Let's assume for `epubx` it provides access to the cover image data.
-
-        // Wait, `epubx` might be the wrong package name if I guessed it.
-        // Codebase search: I should check if I picked the right package.
-        // Standard dart epub package is `epub_package` or `epubx`.
-        // Let's assume standard behavior: `epubBook.CoverImage` might be bytes.
-
-        // If it's a `image.Image` object (from image package), we encode it.
-        // But for safety, let's look at `Content` if `CoverImage` is null.
-
-        // Let's stick to safe implementations.
+      // Step 1: Read container.xml to find OPF path
+      final containerFile = archive.findFile('META-INF/container.xml');
+      if (containerFile == null) {
+        throw Exception('Invalid EPUB: Missing META-INF/container.xml');
       }
 
-      // Re-reading `epubx` capabilities via standard patterns:
-      // Usually `epubBook.CoverImage` is `image.Image?`.
-      // We need to encode it to PNG/JPG for storage/display.
-      // But `anx-reader` expects a base64 string in the existing logic?
-      // Or we can just save it to a file and return the path.
-      // The `saveBook` function eventually takes a `cover` string which seems to be treated as a path OR base64?
+      final containerXml = XmlDocument.parse(
+        utf8.decode(containerFile.content as List<int>),
+      );
+      final rootfileElement = containerXml.findAllElements('rootfile').first;
+      final opfPath = rootfileElement.getAttribute('full-path');
+      if (opfPath == null) {
+        throw Exception('Invalid EPUB: No OPF path in container.xml');
+      }
 
-      // Checking `saveBook` in `book.dart`:
-      // `dbCoverPath = await saveImageToLocal(cover, dbCoverPath);`
-      // `saveImageToLocal` probably handles base64 or url.
+      // Step 2: Read OPF file for metadata
+      final opfFile = archive.findFile(opfPath);
+      if (opfFile == null) {
+        throw Exception('Invalid EPUB: Missing OPF file at $opfPath');
+      }
 
-      // Let's implement a safe return.
+      final opfXml = XmlDocument.parse(
+        utf8.decode(opfFile.content as List<int>),
+      );
+
+      // Extract metadata from OPF
+      final metadataElement = opfXml.findAllElements('metadata').firstOrNull ??
+          opfXml.findAllElements('dc:metadata').firstOrNull;
+
+      String title = 'Unknown';
+      String author = 'Unknown';
+      String? description;
+      String? coverPath;
+
+      if (metadataElement != null) {
+        // Title (dc:title)
+        final titleEl =
+            metadataElement.findAllElements('dc:title').firstOrNull ??
+                metadataElement.findAllElements('title').firstOrNull;
+        if (titleEl != null) {
+          title = titleEl.innerText.trim();
+        }
+
+        // Author (dc:creator)
+        final authorEl =
+            metadataElement.findAllElements('dc:creator').firstOrNull ??
+                metadataElement.findAllElements('creator').firstOrNull;
+        if (authorEl != null) {
+          author = authorEl.innerText.trim();
+        }
+
+        // Description (dc:description)
+        final descEl =
+            metadataElement.findAllElements('dc:description').firstOrNull ??
+                metadataElement.findAllElements('description').firstOrNull;
+        if (descEl != null) {
+          description = descEl.innerText.trim();
+        }
+
+        // Cover image - find meta with name="cover"
+        final coverMeta = metadataElement
+            .findAllElements('meta')
+            .where((e) => e.getAttribute('name') == 'cover')
+            .firstOrNull;
+        if (coverMeta != null) {
+          final coverId = coverMeta.getAttribute('content');
+          if (coverId != null) {
+            // Find manifest item with this ID
+            final manifestElement =
+                opfXml.findAllElements('manifest').firstOrNull;
+            if (manifestElement != null) {
+              final coverItem = manifestElement
+                  .findAllElements('item')
+                  .where((e) => e.getAttribute('id') == coverId)
+                  .firstOrNull;
+              if (coverItem != null) {
+                coverPath = coverItem.getAttribute('href');
+              }
+            }
+          }
+        }
+      }
+
+      // Step 3: Extract cover image if found
+      String coverBase64 = '';
+      if (coverPath != null) {
+        // Resolve cover path relative to OPF
+        final opfDir = opfPath.contains('/')
+            ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1)
+            : '';
+        final fullCoverPath = opfDir + coverPath;
+
+        final coverFile = archive.findFile(fullCoverPath);
+        if (coverFile != null) {
+          final coverBytes = coverFile.content as List<int>;
+          final mimeType =
+              coverPath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+          coverBase64 = 'data:$mimeType;base64,${base64Encode(coverBytes)}';
+        }
+      }
+
+      AnxLog.info('BookParser: Parsed "$title" by $author');
+
       return {
         'title': title,
         'author': author,
-        'description': epubBook.Schema?.Description,
-        'epubBook': epubBook, // Pass the whole object if needed temporarily
+        'description': description ?? '',
+        'cover': coverBase64,
       };
-    } catch (e) {
-      AnxLog.severe('BookParser: Failed to parse epub: $e');
+    } catch (e, s) {
+      AnxLog.severe('BookParser: Failed to parse epub: $e', s);
       rethrow;
     }
-  }
-
-  static Future<List<int>?> extractCover(EpubBook epubBook) async {
-    // Helper to extract cover bytes
-    // This depends on the exact API of epubx
-    return epubBook.CoverImage?.getBytes();
   }
 }
