@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:core';
 
-import 'package:anx_reader/enums/ai_prompts.dart';
 import 'package:anx_reader/enums/bgimg_alignment.dart';
 import 'package:anx_reader/enums/bgimg_type.dart';
 import 'package:anx_reader/enums/bookshelf_folder_style.dart';
@@ -63,7 +62,6 @@ class Prefs extends ChangeNotifier {
       'chapterSplitSelectedRuleId';
   static const String _chapterSplitCustomRulesKey = 'chapterSplitCustomRules';
   static const String _statisticsDashboardTilesKey = 'statisticsDashboardTiles';
-  static const String _enabledAiToolsKey = 'enabledAiTools';
 
   Future<void> initPrefs() async {
     prefs = await SharedPreferences.getInstance();
@@ -758,84 +756,6 @@ class Prefs extends ChangeNotifier {
     return WindowInfo.fromJson(jsonDecode(windowInfoJson));
   }
 
-  void saveAiConfig(String identifier, Map<String, String> config) {
-    prefs.setString('aiConfig_$identifier', jsonEncode(config));
-    notifyListeners();
-  }
-
-  Map<String, String> getAiConfig(String identifier) {
-    String? aiConfigJson = prefs.getString('aiConfig_$identifier');
-    if (aiConfigJson == null) {
-      return {};
-    }
-    Map<String, dynamic> decoded = jsonDecode(aiConfigJson);
-    return decoded.map((key, value) => MapEntry(key, value.toString()));
-  }
-
-  set selectedAiService(String identifier) {
-    prefs.setString('selectedAiService', identifier);
-    notifyListeners();
-  }
-
-  String get selectedAiService {
-    return prefs.getString('selectedAiService') ?? 'openai';
-  }
-
-  void deleteAiConfig(String identifier) {
-    prefs.remove('aiConfig_$identifier');
-    notifyListeners();
-  }
-
-  void saveAiPrompt(AiPrompts identifier, String prompt) {
-    prefs.setString('aiPrompt_${identifier.name}', prompt);
-    notifyListeners();
-  }
-
-  String getAiPrompt(AiPrompts identifier) {
-    String? aiPrompt = prefs.getString('aiPrompt_${identifier.name}');
-    if (aiPrompt == null) {
-      return identifier.getPrompt();
-    }
-    return aiPrompt;
-  }
-
-  void deleteAiPrompt(AiPrompts identifier) {
-    prefs.remove('aiPrompt_${identifier.name}');
-    notifyListeners();
-  }
-
-  List<String> get enabledAiToolIds {
-    final stored = prefs.getStringList(_enabledAiToolsKey);
-    if (stored == null) {
-      return AiToolRegistry.defaultEnabledToolIds();
-    }
-    if (stored.isEmpty) {
-      return const [];
-    }
-    final sanitized = AiToolRegistry.sanitizeIds(stored);
-    if (sanitized.isEmpty && stored.isNotEmpty) {
-      return AiToolRegistry.defaultEnabledToolIds();
-    }
-    return sanitized;
-  }
-
-  set enabledAiToolIds(List<String> ids) {
-    prefs.setStringList(
-      _enabledAiToolsKey,
-      AiToolRegistry.sanitizeIds(ids),
-    );
-    notifyListeners();
-  }
-
-  bool isAiToolEnabled(String id) {
-    return enabledAiToolIds.contains(id);
-  }
-
-  void resetEnabledAiTools() {
-    prefs.remove(_enabledAiToolsKey);
-    notifyListeners();
-  }
-
   bool shouldShowHint(HintKey key) {
     return prefs.getBool('hint_${key.code}') ?? true;
   }
@@ -868,15 +788,6 @@ class Prefs extends ChangeNotifier {
 
   bool get autoAdjustReadingTheme {
     return prefs.getBool('autoAdjustReadingTheme') ?? false;
-  }
-
-  set maxAiCacheCount(int count) {
-    prefs.setInt('maxAiCacheCount', count);
-    notifyListeners();
-  }
-
-  int get maxAiCacheCount {
-    return prefs.getInt('maxAiCacheCount') ?? 300;
   }
 
   set volumeKeyTurnPage(bool status) {
@@ -951,15 +862,6 @@ class Prefs extends ChangeNotifier {
 
   bool get bottomNavigatorShowStatistics {
     return prefs.getBool('bottomNavigatorShowStatistics') ?? true;
-  }
-
-  bool get bottomNavigatorShowAI {
-    return prefs.getBool('bottomNavigatorShowAI') ?? true;
-  }
-
-  set bottomNavigatorShowAI(bool status) {
-    prefs.setBool('bottomNavigatorShowAI', status);
-    notifyListeners();
   }
 
   set syncCompletedToast(bool status) {
