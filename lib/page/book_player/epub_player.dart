@@ -1081,9 +1081,13 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
     String? indexHtmlPath;
 
     if (Platform.isIOS && _localIndexHtmlPath != null) {
-      // iOS Native Mode: Use file:// for everything
-      url = 'file://${widget.book.fileFullPath}';
+      // iOS Hybrid Mode: file:// for HTML (bypasses some WebView issues),
+      // http:// for book (avoids file:// to file:// fetch restrictions)
+      String uri = Uri.encodeComponent(widget.book.fileFullPath);
+      url = 'http://127.0.0.1:${Server().port}/book/$uri';
       indexHtmlPath = _localIndexHtmlPath;
+      AnxLog.info(
+          'EpubPlayer: iOS Hybrid Mode - HTML: $indexHtmlPath, Book: $url');
     } else {
       // Regular Server Mode
       String uri = Uri.encodeComponent(widget.book.fileFullPath);

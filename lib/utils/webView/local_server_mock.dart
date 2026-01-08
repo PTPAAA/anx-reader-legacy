@@ -24,12 +24,8 @@ Future<String> prepareLocalPlayer() async {
     String indexContent =
         await rootBundle.loadString('assets/foliate-js/index.html');
 
-    // PATCH: Force shouldUseModernBundle = false to ensure we use the 'dist' folder
-    // which we are manually copying (easier than copying the whole 'src' tree).
-    indexContent = indexContent.replaceFirst(
-      'const shouldUseModernBundle = isAppleDevice || (!Number.isNaN(chromeVersion) && chromeVersion >= 100);',
-      'const shouldUseModernBundle = false; // Forced legacy for iOS Local Mode',
-    );
+    // No longer patching shouldUseModernBundle - let original detection logic work
+    // The iOS WebView should correctly detect as Apple device and use modern bundle
 
     await indexHtmlFile.writeAsString(indexContent);
 
