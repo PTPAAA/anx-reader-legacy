@@ -77,9 +77,8 @@ ThemeData colorSchema(
 
   return themeData
       .copyWith(
-          sliderTheme: const SliderThemeData(year2023: false),
-          progressIndicatorTheme:
-              const ProgressIndicatorThemeData(year2023: false),
+          sliderTheme: const SliderThemeData(),
+          progressIndicatorTheme: const ProgressIndicatorThemeData(),
           scaffoldBackgroundColor: gropedBackgroundColor,
           bottomSheetTheme: BottomSheetThemeData()
               .copyWith(backgroundColor: gropedBackgroundColor),
