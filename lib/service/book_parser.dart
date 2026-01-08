@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:epubx/epubx.dart';
+import 'package:epub_pro/epub_pro.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'dart:convert';
