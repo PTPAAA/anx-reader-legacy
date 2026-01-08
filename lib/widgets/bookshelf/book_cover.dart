@@ -44,7 +44,7 @@ class BookCover extends StatelessWidget {
             ),
           );
 
-    final RoundedSuperellipseBorder borderShape = RoundedSuperellipseBorder(
+    final RoundedRectangleBorder borderShape = RoundedRectangleBorder(
       borderRadius: borderRadius,
       side: const BorderSide(
         width: 0.3,
@@ -60,7 +60,7 @@ class BookCover extends StatelessWidget {
         decoration: ShapeDecoration(
           shape: borderShape,
         ),
-        child: ClipRSuperellipse(
+        child: ClipRRect(
           borderRadius: borderRadius,
           child: child,
         ),
