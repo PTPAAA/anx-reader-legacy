@@ -370,6 +370,8 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     final notes = await bookNoteDao.selectBookNotesByBookId(_book.id);
     final nativeBookmarks = <NativeBookmark>[];
 
+    AnxLog.info('Loading native bookmarks: found ${notes.length} notes');
+
     for (var note in notes) {
       if (note.type == 'bookmark' && note.cfi.startsWith('native_pos_v1:')) {
         try {
@@ -390,12 +392,17 @@ class ReadingPageState extends ConsumerState<ReadingPage>
         }
       }
     }
+    AnxLog.info('Parsed ${nativeBookmarks.length} valid native bookmarks');
     _bookmarksNotifier.value = nativeBookmarks;
   }
 
   void _onAddBookmark() async {
+    AnxLog.info('User clicked add bookmark');
     final currentState = nativePlayerKey.currentState;
-    if (currentState == null) return;
+    if (currentState == null) {
+      AnxLog.warning('NativeEpubPlayer state is null');
+      return;
+    }
 
     final bookmarkData = currentState.createBookmarkData();
     final note = BookNote(
@@ -411,6 +418,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     );
 
     await bookNoteDao.save(note);
+    AnxToast.show('Bookmark added'); // Use toast
     _loadNativeBookmarks();
   }
 
@@ -538,12 +546,21 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                                                         _onDeleteBookmark,
                                                     onGoToBookmark:
                                                         _onGoToBookmark,
-                                                    getChapterTitle: (index) =>
-                                                        nativePlayerKey
-                                                            .currentState
-                                                            ?.parser
-                                                            ?.chapters[index]
-                                                            .title,
+                                                    getChapterTitle: (index) {
+                                                      final chapters =
+                                                          nativePlayerKey
+                                                              .currentState
+                                                              ?.parser
+                                                              ?.chapters;
+                                                      if (chapters != null &&
+                                                          index >= 0 &&
+                                                          index <
+                                                              chapters.length) {
+                                                        return chapters[index]
+                                                            .title;
+                                                      }
+                                                      return 'Page ${index + 1}';
+                                                    },
                                                     hideAppBarAndBottomBar:
                                                         showOrHideAppBarAndBottomBar,
                                                     closeDrawer: () {},
